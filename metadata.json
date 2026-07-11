@@ -1,0 +1,6 @@
+{
+  "name": "Flora_X",
+  "description": "An elegant, enterprise-grade, multi-vendor flower marketplace for Kenya connecting customers with verified florists.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
