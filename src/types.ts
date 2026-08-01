@@ -84,3 +84,58 @@ export interface CartItem {
   deliverySlot?: string;
   cardMessage?: string;
 }
+
+export interface FloristProfileData {
+  id: string;
+  userId: string;
+  storeName: string;
+  slug: string;
+  description: string;
+  legalBusinessName: string;
+  businessRegistrationNumber?: string;
+  mpesaTillNumber: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  addressText: string;
+  county?: string;
+  town?: string;
+  latitude: number;
+  longitude: number;
+  logoUrl: string;
+  bannerUrl: string;
+  deliveryRadiusKm: number;
+  minimumOrderAmount: number;
+  deliveryFeeStandard?: number;
+  sameDayDeliveryAvailable?: boolean;
+  deliveryCutoffTime?: string;
+  verificationStatus: 'approved' | 'pending_review' | 'suspended' | 'rejected' | 'inactive';
+  businessHours?: Array<{ day: string; open: string; close: string; isClosed: boolean }>;
+  socials?: {
+    instagram?: string;
+    facebook?: string;
+    tiktok?: string;
+    whatsapp?: string;
+  };
+  ratingAvg?: number;
+  ratingCount?: number;
+  created_at?: string;
+}
+
+export interface FloristWalletData {
+  grossSales: number;
+  commissionDeducted: number;
+  totalNetEarnings: number;
+  availableBalance: number;
+  pendingBalance: number;
+  withdrawnToDate: number;
+  history: Array<{
+    id: string;
+    date: string;
+    entryType: string;
+    description: string;
+    grossAmount?: number;
+    commissionDeducted?: number;
+    amount: number;
+  }>;
+}
+

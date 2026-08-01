@@ -1,0 +1,782 @@
+{
+  "users": [
+    {
+      "id": "superadmin-uuid",
+      "email": "superadmin@florax.co.ke",
+      "passwordHash": "$2b$10$gpSFCmUepyDdqOAjjRMZuOIpfpaf0DU6DJPRwWslIIvkEKUZrUkVa",
+      "role": "super_admin",
+      "isVerified": true,
+      "created_at": "2026-07-26T10:00:00.000Z"
+    },
+    {
+      "id": "admin-uuid",
+      "email": "admin@florax.co.ke",
+      "passwordHash": "$2b$10$gpSFCmUepyDdqOAjjRMZuOIpfpaf0DU6DJPRwWslIIvkEKUZrUkVa",
+      "role": "admin",
+      "isVerified": true,
+      "created_at": "2026-07-26T16:51:00.551Z"
+    },
+    {
+      "id": "u-hg121lqqm",
+      "email": "testuser@example.com",
+      "passwordHash": "$2b$10$z/u0CfotSc2AfDeRTooLt.7/tdUo4mzc2K8G4qb2Mx3c9QMhMb9au",
+      "role": "customer",
+      "isVerified": true,
+      "isSuspended": false,
+      "created_at": "2026-07-26T16:58:25.506Z"
+    },
+    {
+      "id": "u-kig80n23e",
+      "email": "omaya@gmail.com",
+      "passwordHash": "$2b$10$55gQJWtVKfNJhe/GbDSzY.v6iK7Z9CoRUtG0z93U70uxiSPb1AMsW",
+      "role": "customer",
+      "isVerified": true,
+      "isSuspended": false,
+      "created_at": "2026-07-26T17:01:59.834Z"
+    },
+    {
+      "id": "u-cust3",
+      "email": "kamau.nairobi@gmail.com",
+      "passwordHash": "$2b$10$55gQJWtVKfNJhe/GbDSzY.v6iK7Z9CoRUtG0z93U70uxiSPb1AMsW",
+      "role": "customer",
+      "isVerified": true,
+      "isSuspended": false,
+      "created_at": "2026-07-28T09:15:20.100Z"
+    },
+    {
+      "id": "u-823prkexh",
+      "email": "wambui@exaple.com",
+      "passwordHash": "$2b$10$hhKqpK.SQ5Q/.6r9uvS9bOx2eoyYOO7O2.pEPBEnT1tuWl/mQ5vPe",
+      "role": "florist",
+      "isVerified": true,
+      "isSuspended": false,
+      "created_at": "2026-07-26T17:08:20.560Z"
+    },
+    {
+      "id": "florist-user-1",
+      "email": "florist1@florax.co.ke",
+      "passwordHash": "$2b$10$hhKqpK.SQ5Q/.6r9uvS9bOx2eoyYOO7O2.pEPBEnT1tuWl/mQ5vPe",
+      "role": "florist",
+      "isVerified": true,
+      "isSuspended": false,
+      "created_at": "2026-07-26T16:51:00.551Z"
+    },
+    {
+      "id": "florist-user-2",
+      "email": "florist2@florax.co.ke",
+      "passwordHash": "$2b$10$hhKqpK.SQ5Q/.6r9uvS9bOx2eoyYOO7O2.pEPBEnT1tuWl/mQ5vPe",
+      "role": "florist",
+      "isVerified": true,
+      "isSuspended": false,
+      "created_at": "2026-07-26T16:51:00.551Z"
+    }
+  ],
+  "administrators": [
+    {
+      "id": "admin-user-1",
+      "userId": "superadmin-uuid",
+      "name": "Marketplace Super Administrator",
+      "email": "superadmin@florax.co.ke",
+      "role": "super_admin",
+      "department": "Platform Executive",
+      "status": "active",
+      "permissions": [
+        "users.view",
+        "users.edit",
+        "users.delete",
+        "florists.view",
+        "florists.verify",
+        "florists.suspend",
+        "orders.view",
+        "orders.edit",
+        "orders.refund",
+        "payments.view",
+        "wallets.view",
+        "reports.view",
+        "cms.manage",
+        "notifications.manage",
+        "settings.manage",
+        "admins.manage",
+        "system.manage"
+      ],
+      "lastLogin": "2026-07-31T08:30:00.000Z"
+    },
+    {
+      "id": "admin-user-2",
+      "userId": "admin-uuid",
+      "name": "Operations Auditor",
+      "email": "admin@florax.co.ke",
+      "role": "admin",
+      "department": "Marketplace Operations",
+      "status": "active",
+      "permissions": [
+        "users.view",
+        "users.edit",
+        "florists.view",
+        "florists.verify",
+        "florists.suspend",
+        "orders.view",
+        "orders.edit",
+        "orders.refund",
+        "payments.view",
+        "wallets.view",
+        "reports.view",
+        "cms.manage",
+        "notifications.manage"
+      ],
+      "lastLogin": "2026-07-31T07:15:00.000Z"
+    }
+  ],
+  "florists": [
+    {
+      "id": "florist-1",
+      "userId": "florist-user-1",
+      "storeName": "Molo Highlands Florist",
+      "slug": "molo-highlands",
+      "description": "Stunning, volcanic highlands roses and custom visual bouquets delivered daily in Nairobi.",
+      "legalBusinessName": "Molo Highlands Flowers Limited",
+      "businessRegistrationNumber": "PVT-88931",
+      "mpesaTillNumber": "883311",
+      "addressText": "Rhapta Road, Westlands, Nairobi",
+      "latitude": -1.2682,
+      "longitude": 36.8041,
+      "logoUrl": "https://images.unsplash.com/photo-1596436889106-be35e843f974?w=150&auto=format&fit=crop&q=60",
+      "bannerUrl": "https://images.unsplash.com/photo-1516253593875-bd7ba052fbc5?w=800&auto=format&fit=crop&q=60",
+      "deliveryRadiusKm": 20,
+      "minimumOrderAmount": 1500,
+      "verificationStatus": "suspended",
+      "ratingAvg": 4.8,
+      "ratingCount": 124,
+      "walletBalance": 18400,
+      "pendingBalance": 3500,
+      "withdrawnToDate": 12000,
+      "created_at": "2026-07-26T16:51:00.551Z"
+    },
+    {
+      "id": "florist-2",
+      "userId": "florist-user-2",
+      "storeName": "Lake Naivasha Blooms",
+      "slug": "naivasha-blooms",
+      "description": "Fresh farm-direct spray carnations, lilies, and customized luxury boxes.",
+      "legalBusinessName": "Naivasha Fresh Exports Ltd",
+      "businessRegistrationNumber": "CPR/2025/11029",
+      "mpesaTillNumber": "445522",
+      "addressText": "Moi South Lake Rd, Naivasha",
+      "latitude": -0.7178,
+      "longitude": 36.4319,
+      "logoUrl": "https://images.unsplash.com/photo-1526047932273-341f2a7631f9?w=150&auto=format&fit=crop&q=60",
+      "bannerUrl": "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=800&auto=format&fit=crop&q=60",
+      "deliveryRadiusKm": 15,
+      "minimumOrderAmount": 1000,
+      "verificationStatus": "suspended",
+      "ratingAvg": 4.6,
+      "ratingCount": 88,
+      "walletBalance": 9200,
+      "pendingBalance": 1800,
+      "withdrawnToDate": 4500,
+      "created_at": "2026-07-26T16:51:00.551Z"
+    },
+    {
+      "id": "f-nufm83te1",
+      "userId": "u-823prkexh",
+      "storeName": "Naivasha Sunset Blooms",
+      "slug": "naivasha-sunset-blooms",
+      "description": "Highland rose curations sourced fresh from Naivasha crater farms. Specialized in delicate premium wrapping and cold chains.",
+      "legalBusinessName": "Sunset Flora Logistics Ltd",
+      "businessRegistrationNumber": "CPR/2026/88319",
+      "mpesaTillNumber": "552233",
+      "addressText": "Moi South Lake Road, Naivasha",
+      "latitude": -0.7303,
+      "longitude": 36.4251,
+      "logoUrl": "https://images.unsplash.com/photo-1596436889106-be35e843f974?w=150&auto=format&fit=crop&q=60",
+      "bannerUrl": "https://images.unsplash.com/photo-1516253593875-bd7ba052fbc5?w=800&auto=format&fit=crop&q=60",
+      "deliveryRadiusKm": 25,
+      "minimumOrderAmount": 1500,
+      "verificationStatus": "approved",
+      "ratingAvg": 0,
+      "ratingCount": 0,
+      "walletBalance": 0,
+      "pendingBalance": 0,
+      "withdrawnToDate": 0,
+      "created_at": "2026-07-26T17:08:40.540Z"
+    }
+  ],
+  "customer_profiles": [
+    {
+      "id": "cp-5151mjyb0",
+      "userId": "u-hg121lqqm",
+      "firstName": "Test",
+      "lastName": "User",
+      "phoneNumber": "+254700000000",
+      "avatarUrl": null,
+      "rewardPointsBalance": 50,
+      "notificationSettings": {
+        "email": true,
+        "sms": true
+      },
+      "privacySettings": {
+        "share_data": false
+      }
+    },
+    {
+      "id": "cp-e2dluww6n",
+      "userId": "u-kig80n23e",
+      "firstName": "Omaya",
+      "lastName": "Mwangi",
+      "phoneNumber": "0757989955",
+      "avatarUrl": null,
+      "rewardPointsBalance": 120,
+      "notificationSettings": {
+        "email": true,
+        "sms": true
+      },
+      "privacySettings": {
+        "share_data": false
+      }
+    },
+    {
+      "id": "cp-mb0zoxgch",
+      "userId": "u-cust3",
+      "firstName": "Kamau",
+      "lastName": "Njoroge",
+      "phoneNumber": "0722114455",
+      "avatarUrl": null,
+      "rewardPointsBalance": 300,
+      "notificationSettings": {
+        "email": true,
+        "sms": true
+      },
+      "privacySettings": {
+        "share_data": false
+      }
+    }
+  ],
+  "addresses": [
+    {
+      "id": "addr-1",
+      "customerId": "cp-5151mjyb0",
+      "label": "Home",
+      "streetAddress": "Apartment 4B, Riverside Drive",
+      "city": "Nairobi",
+      "latitude": -1.2721,
+      "longitude": 36.8082,
+      "deliveryInstructions": "Call on arrival at the security gate",
+      "isDefault": true
+    }
+  ],
+  "parent_orders": [
+    {
+      "id": "pord-vwpyl2ssf",
+      "customerId": "cp-5151mjyb0",
+      "customerName": "Test User",
+      "customerEmail": "testuser@example.com",
+      "customerPhone": "+254700000000",
+      "grandTotal": 4850,
+      "itemsSubtotal": 4500,
+      "deliveryFees": 350,
+      "paymentMethod": "M-Pesa",
+      "paymentStatus": "paid",
+      "created_at": "2026-07-31T06:19:18.717Z",
+      "subOrders": [
+        {
+          "id": "subord-101",
+          "floristId": "florist-1",
+          "floristName": "Molo Highlands Florist",
+          "subTotal": 2500,
+          "deliveryFee": 350,
+          "platformCommission": 300,
+          "floristNetEarnings": 2200,
+          "fulfillmentStatus": "delivered",
+          "recipientName": "Alice Mwangi",
+          "recipientPhone": "0711223344",
+          "deliveryAddress": "Rhapta Road, Westlands, Nairobi",
+          "deliveryDate": "2026-07-31",
+          "deliverySlot": "Morning (09:00 - 12:00)",
+          "giftCardMessage": "Happy Anniversary My Love!",
+          "items": [
+            {
+              "id": "item-1",
+              "productTitle": "Velvet Grandeur Red Roses",
+              "quantity": 1,
+              "unitPrice": 2500
+            }
+          ]
+        },
+        {
+          "id": "subord-102",
+          "floristId": "florist-2",
+          "floristName": "Lake Naivasha Blooms",
+          "subTotal": 2000,
+          "deliveryFee": 0,
+          "platformCommission": 240,
+          "floristNetEarnings": 1760,
+          "fulfillmentStatus": "preparing",
+          "recipientName": "Alice Mwangi",
+          "recipientPhone": "0711223344",
+          "deliveryAddress": "Rhapta Road, Westlands, Nairobi",
+          "deliveryDate": "2026-07-31",
+          "deliverySlot": "Afternoon (14:00 - 17:00)",
+          "giftCardMessage": "Sending you sunshine!",
+          "items": [
+            {
+              "id": "item-2",
+              "productTitle": "Naivasha Sunburst Lilies",
+              "quantity": 1,
+              "unitPrice": 2000
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pord-883109a",
+      "customerId": "cp-e2dluww6n",
+      "customerName": "Omaya Mwangi",
+      "customerEmail": "omaya@gmail.com",
+      "customerPhone": "0757989955",
+      "grandTotal": 3200,
+      "itemsSubtotal": 2900,
+      "deliveryFees": 300,
+      "paymentMethod": "M-Pesa",
+      "paymentStatus": "paid",
+      "created_at": "2026-07-30T14:20:00.000Z",
+      "subOrders": [
+        {
+          "id": "subord-103",
+          "floristId": "florist-1",
+          "floristName": "Molo Highlands Florist",
+          "subTotal": 2900,
+          "deliveryFee": 300,
+          "platformCommission": 348,
+          "floristNetEarnings": 2552,
+          "fulfillmentStatus": "out_for_delivery",
+          "recipientName": "Sarah Kamau",
+          "recipientPhone": "0722998811",
+          "deliveryAddress": "Lavington Green, House #14, Nairobi",
+          "deliveryDate": "2026-08-01",
+          "deliverySlot": "Morning (09:00 - 12:00)",
+          "giftCardMessage": "Congratulations on the new job!",
+          "items": [
+            {
+              "id": "item-3",
+              "productTitle": "Royal Ivory Bouquet",
+              "quantity": 1,
+              "unitPrice": 2900
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pord-992310b",
+      "customerId": "cp-mb0zoxgch",
+      "customerName": "Kamau Njoroge",
+      "customerEmail": "kamau.nairobi@gmail.com",
+      "customerPhone": "0722114455",
+      "grandTotal": 5300,
+      "itemsSubtotal": 5000,
+      "deliveryFees": 300,
+      "paymentMethod": "M-Pesa",
+      "paymentStatus": "paid",
+      "created_at": "2026-08-01T08:15:00.000Z",
+      "subOrders": [
+        {
+          "id": "subord-104",
+          "floristId": "florist-1",
+          "floristName": "Molo Highlands Florist",
+          "subTotal": 5000,
+          "deliveryFee": 300,
+          "platformCommission": 600,
+          "floristNetEarnings": 4400,
+          "fulfillmentStatus": "received",
+          "recipientName": "Grace Wanjiku",
+          "recipientPhone": "0733556677",
+          "deliveryAddress": "Kilimani Estate, Argwings Kodhek Rd, Gate 3, Nairobi",
+          "deliveryDate": "2026-08-01",
+          "deliverySlot": "Afternoon (14:00 - 17:00)",
+          "giftCardMessage": "Happy Birthday Grace! May your day bloom bright.",
+          "items": [
+            {
+              "id": "item-4",
+              "productTitle": "Velvet Grandeur Red Roses",
+              "quantity": 2,
+              "unitPrice": 2500
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pord-992311c",
+      "customerId": "cp-5151mjyb0",
+      "customerName": "Test User",
+      "customerEmail": "testuser@example.com",
+      "customerPhone": "+254700000000",
+      "grandTotal": 3200,
+      "itemsSubtotal": 2900,
+      "deliveryFees": 300,
+      "paymentMethod": "M-Pesa",
+      "paymentStatus": "paid",
+      "created_at": "2026-08-01T07:30:00.000Z",
+      "subOrders": [
+        {
+          "id": "subord-105",
+          "floristId": "florist-1",
+          "floristName": "Molo Highlands Florist",
+          "subTotal": 2900,
+          "deliveryFee": 300,
+          "platformCommission": 348,
+          "floristNetEarnings": 2552,
+          "fulfillmentStatus": "ready_for_pickup",
+          "recipientName": "Dr. Beatrice Odhiambo",
+          "recipientPhone": "0712345678",
+          "deliveryAddress": "Nairobi Hospital Doctors Plaza, 2nd Floor",
+          "deliveryDate": "2026-08-01",
+          "deliverySlot": "Morning (09:00 - 12:00)",
+          "giftCardMessage": "With immense gratitude for your care and guidance.",
+          "items": [
+            {
+              "id": "item-5",
+              "productTitle": "Royal Ivory Bouquet",
+              "quantity": 1,
+              "unitPrice": 2900
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pord-992312d",
+      "customerId": "cp-e2dluww6n",
+      "customerName": "Omaya Mwangi",
+      "customerEmail": "omaya@gmail.com",
+      "customerPhone": "0757989955",
+      "grandTotal": 2800,
+      "itemsSubtotal": 2500,
+      "deliveryFees": 300,
+      "paymentMethod": "M-Pesa",
+      "paymentStatus": "pending",
+      "created_at": "2026-08-01T09:45:00.000Z",
+      "subOrders": [
+        {
+          "id": "subord-106",
+          "floristId": "florist-1",
+          "floristName": "Molo Highlands Florist",
+          "subTotal": 2500,
+          "deliveryFee": 300,
+          "platformCommission": 300,
+          "floristNetEarnings": 2200,
+          "fulfillmentStatus": "received",
+          "recipientName": "Kipchoge Keino",
+          "recipientPhone": "0788776655",
+          "deliveryAddress": "Karen Road, Plot 88, Nairobi",
+          "deliveryDate": "2026-08-02",
+          "deliverySlot": "Standard Delivery",
+          "giftCardMessage": "Get well soon champion!",
+          "items": [
+            {
+              "id": "item-6",
+              "productTitle": "Velvet Grandeur Red Roses",
+              "quantity": 1,
+              "unitPrice": 2500
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "mpesa_transactions": [
+    {
+      "id": "tx-uhzgez5pg",
+      "parent_order_id": "pord-vwpyl2ssf",
+      "merchant_request_id": "req-fi7127wmm",
+      "checkout_request_id": "ws_CO_1785086358721_zdoyvx",
+      "phone_number": "0711223344",
+      "amount": 4850,
+      "status": "success",
+      "mpesa_receipt_number": "SGBS8F6X0IZ",
+      "created_at": "2026-07-31T06:19:18.721Z"
+    },
+    {
+      "id": "tx-99201aa",
+      "parent_order_id": "pord-883109a",
+      "merchant_request_id": "req-99210411",
+      "checkout_request_id": "ws_CO_1785099831_abc11",
+      "phone_number": "0757989955",
+      "amount": 3200,
+      "status": "success",
+      "mpesa_receipt_number": "RKS992011KL",
+      "created_at": "2026-07-30T14:20:00.000Z"
+    }
+  ],
+  "withdrawals": [
+    {
+      "id": "wth-1001",
+      "floristId": "florist-1",
+      "floristName": "Molo Highlands Florist",
+      "amount": 5000,
+      "payoutChannel": "mpesa",
+      "mpesaPhone": "0722883311",
+      "status": "pending",
+      "adminNotes": null,
+      "payoutReference": null,
+      "created_at": "2026-07-30T18:00:00.000Z"
+    },
+    {
+      "id": "wth-1002",
+      "floristId": "florist-2",
+      "floristName": "Lake Naivasha Blooms",
+      "amount": 4500,
+      "payoutChannel": "mpesa",
+      "mpesaPhone": "0711445522",
+      "status": "completed",
+      "adminNotes": "Batch weekly payout settled",
+      "payoutReference": "MPESA-OUT-998231",
+      "created_at": "2026-07-28T10:00:00.000Z"
+    }
+  ],
+  "products": [
+    {
+      "id": "prod-1",
+      "floristId": "florist-1",
+      "title": "Velvet Grandeur Red Roses",
+      "slug": "velvet-grandeur-red-roses",
+      "description": "24 hand-selected Molo volcanic roses arranged with eucalyptus foliage.",
+      "category": "Roses",
+      "price": 2500,
+      "inventoryQty": 18,
+      "moderationStatus": "approved",
+      "isFeatured": true,
+      "isTrending": true,
+      "imageUrl": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=60"
+    },
+    {
+      "id": "prod-2",
+      "floristId": "florist-2",
+      "title": "Naivasha Sunburst Lilies",
+      "slug": "naivasha-sunburst-lilies",
+      "description": "Vibrant yellow oriental lilies direct from Naivasha lakeside greenhouse.",
+      "category": "Lilies",
+      "price": 2000,
+      "inventoryQty": 4,
+      "moderationStatus": "approved",
+      "isFeatured": false,
+      "isTrending": true,
+      "imageUrl": "https://images.unsplash.com/photo-1526047932273-341f2a7631f9?w=600&auto=format&fit=crop&q=60"
+    },
+    {
+      "id": "prod-3",
+      "floristId": "florist-1",
+      "title": "Royal Ivory Bouquet",
+      "slug": "royal-ivory-bouquet",
+      "description": "White garden roses, gypsophila, and satin ribbon wrap.",
+      "category": "Roses",
+      "price": 2900,
+      "inventoryQty": 2,
+      "moderationStatus": "approved",
+      "isFeatured": true,
+      "isTrending": false,
+      "imageUrl": "https://images.unsplash.com/photo-1561181286-d3fee7d55364?w=600&auto=format&fit=crop&q=60"
+    }
+  ],
+  "categories": [
+    {
+      "id": "cat-1",
+      "name": "Roses",
+      "slug": "roses",
+      "type": "category",
+      "description": "Classic and highland scented roses"
+    },
+    {
+      "id": "cat-2",
+      "name": "Lilies",
+      "slug": "lilies",
+      "type": "category",
+      "description": "Fragrant oriental and spray lilies"
+    },
+    {
+      "id": "cat-3",
+      "name": "Carnations",
+      "slug": "carnations",
+      "type": "category",
+      "description": "Long-lasting vibrant carnations"
+    },
+    {
+      "id": "cat-4",
+      "name": "Luxury Boxes",
+      "slug": "luxury-boxes",
+      "type": "category",
+      "description": "Signature keepsake box arrangements"
+    }
+  ],
+  "coupons": [
+    {
+      "id": "coup-1",
+      "code": "WELCOME10",
+      "discountType": "percentage",
+      "discountValue": 10,
+      "minimumPurchase": 2000,
+      "scope": "global",
+      "usedCount": 42,
+      "isActive": true,
+      "startDate": "2026-07-01",
+      "endDate": "2026-12-31"
+    },
+    {
+      "id": "coup-2",
+      "code": "FLORA500",
+      "discountType": "fixed_amount",
+      "discountValue": 500,
+      "minimumPurchase": 3500,
+      "scope": "global",
+      "usedCount": 18,
+      "isActive": true,
+      "startDate": "2026-07-15",
+      "endDate": "2026-08-31"
+    }
+  ],
+  "reviews": [
+    {
+      "id": "rev-1",
+      "customerName": "Test User",
+      "floristId": "florist-1",
+      "productTitle": "Velvet Grandeur Red Roses",
+      "rating": 5,
+      "reviewText": "The freshness of the roses was unmatched! Delivered right on time for our anniversary.",
+      "moderationStatus": "approved",
+      "created_at": "2026-07-31T07:00:00.000Z"
+    }
+  ],
+  "cms": {
+    "hero": {
+      "headline": "Fresh Farm-Direct Flowers Delivered Across Kenya",
+      "subheadline": "Connect with top verified florists in Nairobi, Naivasha, and Eldoret for artisanal arrangements.",
+      "primaryCTA": "Explore Catalog",
+      "bannerUrl": "https://images.unsplash.com/photo-1516253593875-bd7ba052fbc5?w=1600&auto=format&fit=crop&q=80"
+    },
+    "announcementBar": {
+      "text": "🌸 Same-day delivery available in Nairobi for orders placed before 2:00 PM EAT!",
+      "isActive": true
+    },
+    "about": {
+      "title": "About Flora_X Marketplace",
+      "content": "Flora_X is Kenya's premier digital flower ecosystem powering local floral artisans and farms."
+    }
+  },
+  "delivery_zones": [
+    {
+      "id": "zone-1",
+      "name": "Nairobi Central & Westlands",
+      "baseFee": 300,
+      "sameDayCutoff": "14:00",
+      "surgeMultiplier": 1
+    },
+    {
+      "id": "zone-2",
+      "name": "Nairobi Suburbs (Karen, Langata, Runda)",
+      "baseFee": 450,
+      "sameDayCutoff": "13:00",
+      "surgeMultiplier": 1.1
+    },
+    {
+      "id": "zone-3",
+      "name": "Naivasha & Nakuru Highway",
+      "baseFee": 600,
+      "sameDayCutoff": "11:00",
+      "surgeMultiplier": 1.2
+    }
+  ],
+  "system_config": {
+    "platformCommissionPercent": 20,
+    "maintenanceMode": false,
+    "autoApproveFlorists": false,
+    "mpesaShortcode": "883311",
+    "mpesaEnvironment": "sandbox",
+    "smtpHost": "smtp.florax.co.ke",
+    "smtpPort": 587,
+    "smtpStatus": "connected",
+    "googleMapsConfigured": true,
+    "jwtExpirationHours": 24,
+    "maxLoginAttempts": 5,
+    "supportEmail": "support@florax.co.ke"
+  },
+  "audit_logs": [
+    {
+      "id": "aud-1001",
+      "adminId": "superadmin-uuid",
+      "action": "system_config_update",
+      "targetTable": "system_config",
+      "targetId": "global",
+      "timestamp": "2026-07-31T08:00:00.000Z"
+    },
+    {
+      "id": "aud-1002",
+      "adminId": "admin-uuid",
+      "action": "approve_florist",
+      "targetTable": "florists",
+      "targetId": "florist-1",
+      "timestamp": "2026-07-26T17:00:00.000Z"
+    },
+    {
+      "id": "aud-0zzw8u53v",
+      "adminId": "admin-uuid",
+      "action": "suspend_florist",
+      "targetTable": "florists",
+      "targetId": "f-nufm83te1",
+      "timestamp": "2026-08-01T16:06:13.569Z"
+    },
+    {
+      "id": "aud-0528v0rp6",
+      "adminId": "admin-uuid",
+      "action": "suspend_florist",
+      "targetTable": "florists",
+      "targetId": "florist-2",
+      "timestamp": "2026-08-01T16:06:18.059Z"
+    },
+    {
+      "id": "aud-bibf346h5",
+      "adminId": "admin-uuid",
+      "action": "suspend_florist",
+      "targetTable": "florists",
+      "targetId": "florist-1",
+      "timestamp": "2026-08-01T16:06:20.096Z"
+    },
+    {
+      "id": "aud-9mwhw77zl",
+      "adminId": "admin-uuid",
+      "action": "reactivate_florist",
+      "targetTable": "florists",
+      "targetId": "f-nufm83te1",
+      "timestamp": "2026-08-01T16:06:22.419Z"
+    }
+  ],
+  "activity_feed": [
+    {
+      "id": "act-1",
+      "title": "New Order Placed",
+      "description": "Order #pord-vwpyl2ssf (KES 4,850) paid via M-Pesa by Test User",
+      "timestamp": "15 mins ago",
+      "type": "order"
+    },
+    {
+      "id": "act-2",
+      "title": "Vendor Application",
+      "description": "Naivasha Sunset Blooms submitted business registration CPR/2026/88319",
+      "timestamp": "1 hour ago",
+      "type": "florist"
+    },
+    {
+      "id": "act-3",
+      "title": "Payout Withdrawal Requested",
+      "description": "Molo Highlands Florist requested KES 5,000 M-Pesa payout",
+      "timestamp": "2 hours ago",
+      "type": "financial"
+    }
+  ],
+  "orders": [],
+  "wishlist": [],
+  "messages": [],
+  "notifications": [],
+  "referrals": [],
+  "reward_history": []
+}

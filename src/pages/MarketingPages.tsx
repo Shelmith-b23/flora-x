@@ -589,7 +589,7 @@ export function BecomeFlorist() {
             Gain immediate access to premium corporate buyers, secure payment processing, SMS status updates, and temperature-controlled logistics networks across Kenya.
           </p>
           <div className="space-y-2 text-xs text-text-secondary font-medium">
-            <div className="flex items-center gap-2">🟢 15% flat platform commission</div>
+            <div className="flex items-center gap-2">🟢 Standard 20% platform commission model</div>
             <div className="flex items-center gap-2">🟢 Next-day payout transfers via M-Pesa Till</div>
             <div className="flex items-center gap-2">🟢 Standard delivery dispatch integrations</div>
           </div>

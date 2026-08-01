@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ShoppingBag, Heart, Menu, X, Trash2, CheckCircle, Smartphone, CreditCard, Landmark, MapPin, Sparkles, Smile, Star, Phone, Mail, ArrowRight, Compass } from 'lucide-react';
+import { ShoppingBag, Heart, Menu, X, Trash2, CheckCircle, Smartphone, CreditCard, Landmark, MapPin, Sparkles, Smile, Star, Phone, Mail, ArrowRight, Compass, LogOut, ShieldCheck } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { MOCK_PRODUCTS } from '../data';
+import axios from 'axios';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -22,11 +24,40 @@ export function Layout({ children }: LayoutProps) {
     clearCart
   } = useApp();
 
+  const { user, logout } = useAuth();
+
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [checkoutStep, setCheckoutStep] = useState<'cart' | 'payment' | 'processing' | 'success'>('cart');
   const [mpesaPhone, setMpesaPhone] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'mpesa' | 'card'>('mpesa');
+
+  const [recipientName, setRecipientName] = useState('');
+  const [recipientPhone, setRecipientPhone] = useState('');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [deliveryDate, setDeliveryDate] = useState(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow.toISOString().split('T')[0];
+  });
+  const [deliveryInstructions, setDeliveryInstructions] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [parentOrderId, setParentOrderId] = useState('');
+
+  // Sync recipient and phone from user profile
+  useEffect(() => {
+    if (user) {
+      if (!recipientName && user.profile) {
+        setRecipientName(`${user.profile.firstName || ''} ${user.profile.lastName || ''}`.trim());
+      }
+      if (!recipientPhone && user.profile) {
+        setRecipientPhone(user.profile.phoneNumber || '');
+      }
+      if (!mpesaPhone && user.profile) {
+        setMpesaPhone(user.profile.phoneNumber || '');
+      }
+    }
+  }, [user]);
 
   // Scroll listener for sticky header styling
   useEffect(() => {
@@ -54,16 +85,97 @@ export function Layout({ children }: LayoutProps) {
   const totalDeliveryFee = uniqueFloristIds.length * baseDeliveryFee;
   const finalTotal = cartSubtotal + totalDeliveryFee;
 
-  const handleCheckoutSubmit = (e: React.FormEvent) => {
+  const handleCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage('');
+
     if (checkoutStep === 'cart') {
+      if (!user) {
+        setErrorMessage('You must be logged in to checkout.');
+        return;
+      }
       setCheckoutStep('payment');
     } else if (checkoutStep === 'payment') {
+      if (!recipientName || !recipientPhone || !deliveryAddress || !deliveryDate) {
+        setErrorMessage('All delivery fields are required.');
+        return;
+      }
+
       setCheckoutStep('processing');
-      // Simulate Safaricom STK Push API Delay
-      setTimeout(() => {
-        setCheckoutStep('success');
-      }, 3000);
+
+      try {
+        // Step 1: Create Checkout Session
+        const createResp = await axios.post('/api/v1/checkout/create-session', {
+          recipient_name: recipientName,
+          recipient_phone: recipientPhone,
+          delivery_address: deliveryAddress,
+          delivery_date: deliveryDate,
+          delivery_instructions: deliveryInstructions,
+          items: cart.map(item => ({
+            product_id: item.product.id,
+            size: item.size,
+            quantity: item.quantity,
+            cardMessage: item.cardMessage
+          }))
+        });
+
+        if (createResp.data.success) {
+          const parentOrdId = createResp.data.data.parent_order_id;
+          setParentOrderId(parentOrdId);
+
+          // Step 2: Trigger M-Pesa STK Push (if mpesa) or handle card
+          if (paymentMethod === 'mpesa') {
+            const payResp = await axios.post('/api/v1/checkout/pay-mpesa', {
+              parent_order_id: parentOrdId,
+              mpesa_phone: mpesaPhone || recipientPhone
+            });
+
+            if (payResp.data.success) {
+              // Start Polling Verification
+              let pollCount = 0;
+              const interval = setInterval(async () => {
+                pollCount++;
+                try {
+                  const verifyResp = await axios.get(`/api/v1/checkout/verify/${parentOrdId}`);
+                  if (verifyResp.data.success && verifyResp.data.data.payment_status === 'paid') {
+                    clearInterval(interval);
+                    setCheckoutStep('success');
+                  } else if (verifyResp.data.success && verifyResp.data.data.payment_status === 'failed') {
+                    clearInterval(interval);
+                    setCheckoutStep('payment');
+                    setErrorMessage('M-Pesa payment failed. Please try again.');
+                  }
+                } catch (err) {
+                  console.error('Polling payment error:', err);
+                }
+
+                // Timeout after 15 polls (~30 seconds)
+                if (pollCount > 15) {
+                  clearInterval(interval);
+                  setCheckoutStep('payment');
+                  setErrorMessage('Payment confirmation timed out. Please check your transaction list later.');
+                }
+              }, 2000);
+            } else {
+              setCheckoutStep('payment');
+              setErrorMessage(payResp.data.error?.message || 'Failed to initialize M-Pesa transaction.');
+            }
+          } else {
+            // Simulated Card Checkout Success
+            setTimeout(() => {
+              setCheckoutStep('success');
+            }, 3000);
+          }
+        } else {
+          setCheckoutStep('payment');
+          setErrorMessage(createResp.data.error?.message || 'Failed to create checkout session.');
+        }
+      } catch (err: any) {
+        console.error('Checkout execution error:', err);
+        setCheckoutStep('payment');
+        const apiError = err.response?.data?.error?.message || 'An error occurred during checkout processing.';
+        setErrorMessage(apiError);
+      }
     }
   };
 
@@ -71,9 +183,40 @@ export function Layout({ children }: LayoutProps) {
     setCheckoutStep('cart');
     setCartOpen(false);
     clearCart();
+    setRecipientName('');
+    setRecipientPhone('');
+    setDeliveryAddress('');
+    setDeliveryInstructions('');
+    setErrorMessage('');
+    setParentOrderId('');
   };
 
   const wishlistedProducts = MOCK_PRODUCTS.filter((p) => wishlist.includes(p.id));
+
+  // Five Rapid Clicks Logo Admin Access Handler
+  const [logoClicks, setLogoClicks] = useState(0);
+  const [lastLogoClickTime, setLastLogoClickTime] = useState(0);
+  const [showAdminAccessModal, setShowAdminAccessModal] = useState(false);
+
+  const handleLogoClick = () => {
+    const now = Date.now();
+    let newCount = 1;
+    if (now - lastLogoClickTime <= 3000) {
+      newCount = logoClicks + 1;
+    }
+    
+    setLastLogoClickTime(now);
+    setLogoClicks(newCount);
+
+    if (newCount >= 5) {
+      setShowAdminAccessModal(true);
+      setLogoClicks(0);
+      setLastLogoClickTime(0);
+      return;
+    }
+
+    window.location.hash = '#/';
+  };
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-canvas text-text-primary" id="layout-wrapper">
@@ -89,7 +232,7 @@ export function Layout({ children }: LayoutProps) {
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
           {/* Logo */}
           <div
-            onClick={() => { window.location.hash = '#/'; }}
+            onClick={handleLogoClick}
             className="flex items-center gap-2 cursor-pointer group"
           >
             <div className="w-8 h-8 rounded-lg bg-brand-primary flex items-center justify-center text-white font-display font-semibold text-sm transition-transform group-hover:scale-105 shadow-md">
@@ -113,7 +256,7 @@ export function Layout({ children }: LayoutProps) {
           </nav>
 
           {/* User Controls */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 md:gap-4">
             <button
               onClick={() => setWishlistOpen(true)}
               className="relative p-2 rounded-full hover:bg-canvas text-text-primary hover:text-brand-primary transition-all active:scale-95 cursor-pointer"
@@ -141,6 +284,43 @@ export function Layout({ children }: LayoutProps) {
                 </span>
               )}
             </button>
+
+            {user ? (
+              <div className="hidden sm:flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    if (user.role === 'admin' || user.role === 'super_admin') {
+                      window.location.hash = '#/admin';
+                    } else if (user.role === 'florist' && !user.floristStatus) {
+                      window.location.hash = '#/register/florist';
+                    } else if (user.role === 'florist' && user.floristStatus === 'pending_review') {
+                      window.location.hash = '#/pending-approval';
+                    } else {
+                      window.location.hash = '#/profile';
+                    }
+                  }}
+                  className="px-3.5 py-2 border border-brand-primary bg-brand-primary/5 rounded-lg text-xs font-bold uppercase tracking-wider text-brand-primary cursor-pointer transition-all hover:bg-brand-primary/10 flex items-center gap-1.5"
+                >
+                  <span className="w-2 h-2 rounded-full bg-brand-primary animate-pulse" />
+                  {user.profile.firstName || 'My Profile'}
+                </button>
+                <button
+                  onClick={logout}
+                  className="px-3.5 py-2 border border-utility-border text-text-secondary hover:text-brand-secondary hover:border-brand-secondary/40 rounded-lg cursor-pointer hover:bg-canvas transition-all flex items-center gap-1.5 font-bold text-xs uppercase tracking-wider"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Log Out</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => { window.location.hash = '#/login'; }}
+                className="hidden sm:block px-4 py-2 bg-brand-primary text-white hover:bg-brand-primary-hover font-bold text-xs uppercase tracking-wider rounded-md transition-all cursor-pointer"
+              >
+                Sign In
+              </button>
+            )}
 
             {/* Hamburger Button */}
             <button
@@ -434,36 +614,125 @@ export function Layout({ children }: LayoutProps) {
 
               {checkoutStep === 'payment' && (
                 <div className="flex-1 overflow-y-auto py-6 space-y-5">
-                  <span className="text-xs font-bold uppercase tracking-wider text-text-muted font-display block">
-                    Choose Settlement Method
-                  </span>
+                  {errorMessage && (
+                    <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-[11px] rounded-md font-medium">
+                      {errorMessage}
+                    </div>
+                  )}
 
-                  <div className="grid grid-cols-2 gap-3 mb-6">
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('mpesa')}
-                      className={`p-3 rounded-lg border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                        paymentMethod === 'mpesa'
-                          ? 'border-brand-primary bg-brand-primary/5 text-brand-primary'
-                          : 'border-utility-border bg-canvas text-text-secondary'
-                      }`}
-                    >
-                      <Smartphone className="w-5 h-5 text-brand-primary" />
-                      <span className="text-[11px] font-bold">M-Pesa STK</span>
-                    </button>
+                  <div className="space-y-4">
+                    <span className="text-xs font-bold uppercase tracking-wider text-text-muted font-display block border-b border-utility-border pb-1">
+                      1. Delivery Details
+                    </span>
                     
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('card')}
-                      className={`p-3 rounded-lg border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                        paymentMethod === 'card'
-                          ? 'border-brand-primary bg-brand-primary/5 text-brand-primary'
-                          : 'border-utility-border bg-canvas text-text-secondary'
-                      }`}
-                    >
-                      <CreditCard className="w-5 h-5 text-brand-secondary" />
-                      <span className="text-[11px] font-bold">Card Checkout</span>
-                    </button>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-wider font-semibold font-display text-text-muted mb-1">
+                          Recipient Name *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={recipientName}
+                          onChange={(e) => setRecipientName(e.target.value)}
+                          placeholder="e.g. Jane Doe"
+                          className="w-full p-2.5 text-xs border border-utility-border rounded-md focus:outline-hidden focus:border-brand-primary text-text-secondary"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] uppercase tracking-wider font-semibold font-display text-text-muted mb-1">
+                            Recipient Phone *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={recipientPhone}
+                            onChange={(e) => setRecipientPhone(e.target.value)}
+                            placeholder="e.g. +254712345678"
+                            className="w-full p-2.5 text-xs border border-utility-border rounded-md focus:outline-hidden focus:border-brand-primary text-text-secondary font-mono"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] uppercase tracking-wider font-semibold font-display text-text-muted mb-1">
+                            Delivery Date *
+                          </label>
+                          <input
+                            type="date"
+                            required
+                            value={deliveryDate}
+                            onChange={(e) => setDeliveryDate(e.target.value)}
+                            className="w-full p-2.5 text-xs border border-utility-border rounded-md focus:outline-hidden focus:border-brand-primary text-text-secondary"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-wider font-semibold font-display text-text-muted mb-1">
+                          Delivery Address *
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            required
+                            value={deliveryAddress}
+                            onChange={(e) => setDeliveryAddress(e.target.value)}
+                            placeholder="e.g. 8th Floor, Delta Towers, Westlands, Nairobi"
+                            className="w-full p-2.5 pl-8 text-xs border border-utility-border rounded-md focus:outline-hidden focus:border-brand-primary text-text-secondary"
+                          />
+                          <MapPin className="absolute top-3 left-2.5 w-3.5 h-3.5 text-text-muted" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-wider font-semibold font-display text-text-muted mb-1">
+                          Special Instructions (Optional)
+                        </label>
+                        <textarea
+                          value={deliveryInstructions}
+                          onChange={(e) => setDeliveryInstructions(e.target.value)}
+                          placeholder="e.g. ring bell, gate code 2468"
+                          rows={2}
+                          className="w-full p-2.5 text-xs border border-utility-border rounded-md focus:outline-hidden focus:border-brand-primary text-text-secondary resize-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 pt-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-text-muted font-display block border-b border-utility-border pb-1">
+                      2. Choose Settlement Method
+                    </span>
+
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('mpesa')}
+                        className={`p-3 rounded-lg border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          paymentMethod === 'mpesa'
+                            ? 'border-brand-primary bg-brand-primary/5 text-brand-primary'
+                            : 'border-utility-border bg-canvas text-text-secondary'
+                        }`}
+                      >
+                        <Smartphone className="w-5 h-5 text-brand-primary" />
+                        <span className="text-[11px] font-bold">M-Pesa STK</span>
+                      </button>
+                      
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('card')}
+                        className={`p-3 rounded-lg border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          paymentMethod === 'card'
+                            ? 'border-brand-primary bg-brand-primary/5 text-brand-primary'
+                            : 'border-utility-border bg-canvas text-text-secondary'
+                        }`}
+                      >
+                        <CreditCard className="w-5 h-5 text-brand-secondary" />
+                        <span className="text-[11px] font-bold">Card Checkout</span>
+                      </button>
+                    </div>
                   </div>
 
                   <form onSubmit={handleCheckoutSubmit} className="space-y-4">
@@ -746,6 +1015,53 @@ export function Layout({ children }: LayoutProps) {
           )}
         </button>
       </div>
+
+      {/* Hidden Administrator Access Prompt Modal */}
+      {showAdminAccessModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white border border-utility-border rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-brand-primary/10 text-brand-primary flex items-center justify-center font-mono font-bold text-lg shrink-0">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-display font-semibold text-text-primary text-base">
+                  Administrator Access Recognized
+                </h3>
+                <p className="text-xs text-text-muted">
+                  Flora_X Central Governance Switchboard
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-text-secondary leading-relaxed bg-canvas p-3.5 rounded-xl border border-utility-border">
+              You have triggered the hidden administrative doorway via the logo verification pattern. Would you like to proceed to the Flora_X Administrator Login screen?
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setShowAdminAccessModal(false)}
+                className="px-4 py-2 border border-utility-border hover:bg-canvas text-text-secondary rounded-lg text-xs font-bold uppercase tracking-wider cursor-pointer transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowAdminAccessModal(false);
+                  window.location.hash = '#/admin/login';
+                }}
+                className="px-4 py-2 bg-brand-primary hover:bg-brand-primary-hover text-white rounded-lg text-xs font-bold uppercase tracking-wider cursor-pointer transition-all shadow-xs"
+              >
+                Continue to Admin Portal
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }
