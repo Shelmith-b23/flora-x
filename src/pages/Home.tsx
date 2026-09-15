@@ -2,9 +2,8 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Search, MapPin, Sparkles, ShieldCheck, Heart, Clock, Compass, ArrowRight, ArrowUpRight, Star } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { MOCK_PRODUCTS, MOCK_FLORISTS, MOCK_OCCASIONS, MOCK_BLOGS, MOCK_REVIEWS } from '../data';
+import { MOCK_PRODUCTS, MOCK_OCCASIONS, MOCK_BLOGS, MOCK_REVIEWS } from '../data';
 import { ProductCard } from '../components/ProductCard';
-import { AIGiftWizard } from '../components/AIGiftWizard';
 
 export function Home() {
   const { setSearchQuery, setSelectedLocation, setQuickViewProduct } = useApp();
@@ -171,71 +170,7 @@ export function Home() {
         </div>
       </section>
 
-      {/* 3. Featured Florists Directory Teaser */}
-      <section className="py-16 bg-canvas border-t border-utility-border" id="featured-florists">
-        <div className="w-full max-w-7xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row md:items-end justify-between mb-10">
-            <div>
-              <span className="text-xs uppercase tracking-wider font-semibold text-brand-secondary font-display block mb-1">
-                Independent Crafters
-              </span>
-              <h2 className="text-2xl md:text-3xl font-display font-semibold text-text-primary tracking-tight">
-                Meet Kenya's Award-Winning Florists
-              </h2>
-            </div>
-            <button
-              onClick={() => window.location.hash = '#/florists'}
-              className="text-xs uppercase tracking-widest font-semibold text-brand-primary hover:text-brand-primary-hover flex items-center gap-1.5 mt-4 md:mt-0 cursor-pointer"
-            >
-              Discover All Florists
-              <ArrowUpRight className="w-4 h-4" />
-            </button>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {MOCK_FLORISTS.slice(0, 3).map((f) => (
-              <div
-                key={f.id}
-                onClick={() => window.location.hash = `#/florist/${f.id}`}
-                className="group bg-white rounded-xl border border-utility-border overflow-hidden cursor-pointer shadow-xs hover:shadow-[0_12px_24px_rgba(45,90,39,0.05)] transition-all duration-300"
-              >
-                <div className="h-32 bg-canvas overflow-hidden relative">
-                  <img src={f.banner} alt="" className="w-full h-full object-cover opacity-85" />
-                  <div className="absolute top-3 right-3 bg-white/90 px-2 py-0.5 rounded-sm text-[10px] font-bold text-brand-primary border border-utility-border">
-                    ★ {f.rating}
-                  </div>
-                </div>
-                <div className="p-5 flex gap-4 -mt-8 relative">
-                  <div className="w-16 h-16 rounded-lg overflow-hidden border-2 border-white bg-white shadow-md shrink-0">
-                    <img src={f.logo} alt="" className="w-full h-full object-cover" />
-                  </div>
-                  <div className="flex-1 min-w-0 pt-8">
-                    <h3 className="font-display font-semibold text-sm text-text-primary group-hover:text-brand-primary transition-colors truncate flex items-center gap-1.5">
-                      {f.name}
-                      {f.verified && (
-                        <span className="px-1.5 py-0.5 text-[8px] font-bold uppercase text-white bg-brand-primary rounded-xs">
-                          Verified
-                        </span>
-                      )}
-                    </h3>
-                    <p className="text-[11px] text-text-muted mt-1 flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5 text-brand-primary" />
-                      {f.location} • {f.deliveryRadiusKm}km delivery
-                    </p>
-                    <p className="text-xs text-text-secondary mt-3 line-clamp-2 leading-relaxed">
-                      {f.about}
-                    </p>
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-brand-primary group-hover:underline mt-4">
-                      View Storefront
-                      <ArrowRight className="w-3 h-3" />
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* 4. Trending & Seasonal Collections (Bento grid) */}
       <section className="py-16 bg-surface border-t border-utility-border" id="trending-flowers">
@@ -260,32 +195,7 @@ export function Home() {
         </div>
       </section>
 
-      {/* 5. AI Gift recommendation and interactive wizard */}
-      <section className="py-16 bg-canvas border-t border-utility-border relative" id="ai-wizard-hero">
-        <div className="w-full max-w-7xl mx-auto px-6">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            <div className="lg:col-span-5 space-y-5 text-center lg:text-left">
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-brand-primary bg-brand-primary/10 rounded-full font-display">
-                Digital Assistant
-              </span>
-              <h2 className="text-2xl md:text-3xl font-display font-semibold text-text-primary tracking-tight leading-snug">
-                Struggling to find the perfect flower combination?
-              </h2>
-              <p className="text-xs md:text-sm text-text-secondary leading-relaxed">
-                Our bespoke interactive Gift recommendation tool identifies local Kenyan florists that match your recipient’s tastes perfectly. Plus, it designs a custom emotional greeting card message you can include. Try it on the right!
-              </p>
-              
-              <div className="border-l-2 border-brand-primary pl-4 py-1 text-xs text-text-muted italic hidden md:block">
-                "Finding same-day red lilies for a colleague in Kilimani has never been this effortless."
-              </div>
-            </div>
 
-            <div className="lg:col-span-7">
-              <AIGiftWizard />
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* 6. Why Choose Flora_X */}
       <section className="py-16 bg-surface border-t border-utility-border" id="why-choose-us">
@@ -399,36 +309,7 @@ export function Home() {
         </div>
       </section>
 
-      {/* 8. Become a Florist Call to Action */}
-      <section className="py-20 bg-brand-primary text-white text-center relative overflow-hidden" id="become-florist-banner">
-        <div className="absolute inset-0 z-0 opacity-10 pointer-events-none">
-          <img
-            src="https://images.unsplash.com/photo-1490750967868-88aa4486c946?w=1200"
-            alt=""
-            className="w-full h-full object-cover"
-          />
-        </div>
-        <div className="relative z-10 w-full max-w-4xl mx-auto px-6 space-y-6">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 rounded-full text-xs font-bold uppercase tracking-widest text-brand-accent">
-            Grow Your Business
-          </span>
-          <h2 className="text-3xl md:text-4xl lg:text-5xl font-display font-medium tracking-tight text-white leading-tight">
-            Are you a passionate florist based in Kenya? Join the elite.
-          </h2>
-          <p className="text-xs md:text-sm text-white/95 max-w-2xl mx-auto leading-relaxed">
-            Reach thousands of corporate and holiday buyers. Gain access to premium farm sourcing, M-Pesa STK push infrastructure, temperature-regulated logistics, and professional business tools.
-          </p>
-          <div className="pt-2">
-            <button
-              onClick={() => window.location.hash = '#/become-a-florist'}
-              className="px-8 py-3.5 bg-brand-secondary text-white hover:bg-brand-secondary-hover font-semibold text-xs uppercase tracking-wider rounded-lg transition-all shadow-lg inline-flex items-center gap-2 cursor-pointer"
-            >
-              Become a Florist Partner
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </section>
+
 
       {/* 9. Blog Preview Grid */}
       <section className="py-16 bg-surface border-t border-utility-border" id="blog-preview">

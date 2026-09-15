@@ -11,6 +11,12 @@ from models.marketplace import (
     Product, ProductVariant, ParentOrder, SubOrder, OrderItem,
     OrderTimelineEvent, LipaNaMpesaTransaction, FloristWallet, WalletLedger
 )
+from services.mpesa_daraja import (
+    normalize_phone_number,
+    initiate_daraja_stk_push,
+    query_daraja_stk_status,
+    get_mpesa_config
+)
 
 checkout_bp = Blueprint('checkout', __name__, url_prefix='/api/v1/checkout')
 
@@ -282,6 +288,17 @@ def pay_mpesa():
     Preserves historical payment transaction records without deleting failed attempts.
     Re-reserves inventory if retrying a previously failed order payment.
     """
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    if not user or user.deleted_at is not None:
+        return jsonify({
+            "success": False,
+            "error": {
+                "code": "UNAUTHORIZED",
+                "message": "User session not found or inactive."
+            }
+        }), 401
+
     data = request.get_json() or {}
     parent_order_id = data.get('parent_order_id')
     mpesa_phone = data.get('mpesa_phone', '').strip()
@@ -305,6 +322,17 @@ def pay_mpesa():
             }
         }), 404
 
+    # Enforce order ownership for customer accounts
+    if user.role == 'customer':
+        if not user.customer_profile or parent_order.customer_id != user.customer_profile.id:
+            return jsonify({
+                "success": False,
+                "error": {
+                    "code": "FORBIDDEN",
+                    "message": "You are not authorized to initiate payment on this order."
+                }
+            }), 403
+
     if parent_order.payment_status == 'paid':
         return jsonify({
             "success": False,
@@ -315,12 +343,16 @@ def pay_mpesa():
         }), 400
 
     try:
-        # Standardize Kenyan phone number formatting
-        cleaned_phone = mpesa_phone
-        if cleaned_phone.startswith('0'):
-            cleaned_phone = '254' + cleaned_phone[1:]
-        elif cleaned_phone.startswith('+'):
-            cleaned_phone = cleaned_phone[1:]
+        # Standardize Kenyan phone number formatting using authoritative service
+        cleaned_phone = normalize_phone_number(mpesa_phone)
+        if not cleaned_phone or len(cleaned_phone) != 12:
+            return jsonify({
+                "success": False,
+                "error": {
+                    "code": "VALIDATION_FAILED",
+                    "message": "Invalid Kenyan mobile number. Please supply a valid 07XX or 01XX Safaricom number."
+                }
+            }), 422
 
         # If retrying a failed payment, re-validate and re-reserve stock
         if parent_order.payment_status == 'failed':
@@ -332,7 +364,7 @@ def pay_mpesa():
                             "success": False,
                             "error": {
                                 "code": "VALIDATION_FAILED",
-                                "message": f"Inventory for item in order is no longer available for payment retry."
+                                "message": "Inventory for item in order is no longer available for payment retry."
                             }
                         }), 422
                     variant.inventory_qty -= item.quantity
@@ -348,9 +380,21 @@ def pay_mpesa():
             ot.error_description = 'Superceded by a new payment retry attempt.'
         db.session.flush()
 
-        # Create unique request keys mimicking Safaricom Daraja responses
-        merchant_req_id = "req-" + str(uuid.uuid4())
-        checkout_req_id = "ws_CO_" + datetime.utcnow().strftime("%d%m%Y%H%M%S") + "_" + str(uuid.uuid4())[:6]
+        # Attempt real Safaricom Daraja STK Push
+        daraja_ok, stk_res = initiate_daraja_stk_push(
+            phone_number=cleaned_phone,
+            amount=float(parent_order.grand_total),
+            account_reference=parent_order.id[:10],
+            transaction_desc="Flora_X Order"
+        )
+
+        if daraja_ok:
+            merchant_req_id = stk_res.get('merchant_request_id')
+            checkout_req_id = stk_res.get('checkout_request_id')
+        else:
+            # Fallback for sandbox / local development environments
+            merchant_req_id = "req-" + str(uuid.uuid4())
+            checkout_req_id = "ws_CO_" + datetime.utcnow().strftime("%d%m%Y%H%M%S") + "_" + str(uuid.uuid4())[:6]
 
         tx = LipaNaMpesaTransaction(
             parent_order_id=parent_order_id,
@@ -364,7 +408,7 @@ def pay_mpesa():
         db.session.commit()
 
         # STK Push execution log
-        print(f"[M-PESA STK PUSH LOG] Transmitting KES {parent_order.grand_total} request to {cleaned_phone}...")
+        print(f"[M-PESA STK PUSH LOG] Transmitting KES {parent_order.grand_total} request to {cleaned_phone} | CheckoutRequestID: {checkout_req_id}...")
 
         return jsonify({
             "success": True,
@@ -571,6 +615,17 @@ def verify_payment(parent_order_id):
     Auto-simulations are STRICTLY restricted to local development environments only.
     In production / sandbox environments, auto-simulation NEVER fires.
     """
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    if not user or user.deleted_at is not None:
+        return jsonify({
+            "success": False,
+            "error": {
+                "code": "UNAUTHORIZED",
+                "message": "User session not found or inactive."
+            }
+        }), 401
+
     parent_order = ParentOrder.query.get(parent_order_id)
     if not parent_order:
         return jsonify({
@@ -581,9 +636,38 @@ def verify_payment(parent_order_id):
             }
         }), 404
 
+    # Enforce order ownership for customer accounts
+    if user.role == 'customer':
+        if not user.customer_profile or parent_order.customer_id != user.customer_profile.id:
+            return jsonify({
+                "success": False,
+                "error": {
+                    "code": "FORBIDDEN",
+                    "message": "You are not authorized to inspect this order status."
+                }
+            }), 403
+
     # Fetch active transaction
     tx = LipaNaMpesaTransaction.query.filter_by(parent_order_id=parent_order_id).order_by(LipaNaMpesaTransaction.created_at.desc()).first()
     
+    # Active Daraja query reconciliation if transaction is initiated
+    if tx and tx.transaction_status == 'initiated' and not is_development_environment():
+        try:
+            q_ok, q_res = query_daraja_stk_status(tx.checkout_request_id)
+            if q_ok and str(q_res.get("ResultCode")) == "0":
+                process_mpesa_callback_internal(
+                    checkout_request_id=tx.checkout_request_id,
+                    result_code=0,
+                    mpesa_receipt_number=q_res.get("MpesaReceiptNumber"),
+                    error_desc="Reconciled via Daraja STK query",
+                    payload=q_res
+                )
+                db.session.commit()
+                db.session.refresh(parent_order)
+                db.session.refresh(tx)
+        except Exception as e:
+            print(f"[DARAJA QUERY RECONCILIATION] Could not query STK status: {str(e)}")
+
     # Auto-simulate M-Pesa STK push approval ONLY in local development after 2.5 seconds
     if is_development_environment() and tx and tx.transaction_status == 'initiated':
         elapsed = datetime.utcnow() - tx.created_at

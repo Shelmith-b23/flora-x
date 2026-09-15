@@ -42,7 +42,7 @@ export default function Login({ isAdminLogin }: LoginProps) {
         } else if (loggedUser.floristStatus === 'pending_review') {
           window.location.hash = '#/pending-approval';
         } else {
-          window.location.hash = '#/profile';
+          window.location.hash = '#/florist-portal';
         }
       } else {
         window.location.hash = '#/';
@@ -69,7 +69,7 @@ export default function Login({ isAdminLogin }: LoginProps) {
         } else if (loggedUser.floristStatus === 'pending_review') {
           window.location.hash = '#/pending-approval';
         } else {
-          window.location.hash = '#/profile';
+          window.location.hash = '#/florist-portal';
         }
       } else {
         window.location.hash = '#/';

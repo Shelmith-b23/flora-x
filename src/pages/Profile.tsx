@@ -5,10 +5,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   User, MapPin, Key, Trash2, AlertCircle, Plus, CheckCircle, Smartphone, Globe, LogOut,
   ShoppingBag, Heart, MessageSquare, Bell, Star, Award, Gift, Settings, ArrowRight,
-  Truck, Calendar, Clipboard, Check, RefreshCw, Send, Paperclip, ChevronRight, Download, Info, Search, Filter, Edit3, Compass
+  Truck, Calendar, Clipboard, Check, RefreshCw, Send, Paperclip, ChevronRight, Download, Info, Search, Filter, Edit3, Compass, ShieldCheck
 } from 'lucide-react';
 import axios from 'axios';
 import { MOCK_PRODUCTS } from '../data';
+import CustomerSidebar from '../components/customer/CustomerSidebar';
+import CustomerHeader from '../components/customer/CustomerHeader';
 
 export default function Profile() {
   const { user, addresses, fetchAddresses, addAddress, updateProfile, logout } = useAuth();
@@ -16,6 +18,8 @@ export default function Profile() {
 
   // Active Tab: 'overview' | 'orders' | 'wishlist' | 'addresses' | 'inbox' | 'notifications' | 'reviews' | 'rewards' | 'settings'
   const [activeTab, setActiveTab] = useState<string>('overview');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Load state and general messages
   const [loadingPortal, setLoadingPortal] = useState(false);
@@ -91,9 +95,6 @@ export default function Profile() {
   // Time of day greeting
   const [greeting, setGreeting] = useState('Welcome');
 
-  // Map Animation Node for active delivery tracking mockup
-  const [mapTruckPos, setMapTruckPos] = useState({ x: 45, y: 35 });
-
   useEffect(() => {
     const hours = new Date().getHours();
     if (hours < 12) setGreeting('Good Morning');
@@ -108,24 +109,6 @@ export default function Profile() {
     }
   }, [user, activeTab]);
 
-  // Truck logistics simulation on tracking order
-  useEffect(() => {
-    let interval: any;
-    if (selectedOrder && selectedOrder.status !== 'delivered' && selectedOrder.status !== 'cancelled') {
-      interval = setInterval(() => {
-        setMapTruckPos((prev) => {
-          const nextX = prev.x + (Math.random() * 6 - 3);
-          const nextY = prev.y + (Math.random() * 6 - 3);
-          return {
-            x: Math.max(20, Math.min(80, nextX)),
-            y: Math.max(20, Math.min(80, nextY))
-          };
-        });
-      }, 3000);
-    }
-    return () => clearInterval(interval);
-  }, [selectedOrder]);
-
   if (!user) {
     window.location.hash = '#/login';
     return null;
@@ -138,52 +121,52 @@ export default function Profile() {
       await fetchAddresses();
 
       // Get Orders
-      const ordsResp = await axios.get('/api/v1/customer/orders');
-      setOrders(ordsResp.data);
+      const ordsResp = await axios.get('/api/v1/customer/orders').catch(() => ({ data: [] }));
+      const orderList = Array.isArray(ordsResp.data) ? ordsResp.data : [];
+      setOrders(orderList);
 
       // Get Wishlist
-      const wlResp = await axios.get('/api/v1/customer/wishlist');
-      const wishlistedData = wlResp.data;
+      const wlResp = await axios.get('/api/v1/customer/wishlist').catch(() => ({ data: [] }));
+      const wishlistedData = Array.isArray(wlResp.data) ? wlResp.data : [];
       // Match with MOCK_PRODUCTS
       const matchedWL = MOCK_PRODUCTS.filter(p => wishlistedData.some((w: any) => w.productId === p.id));
       setWishlistItems(matchedWL);
 
       // Get Messages
-      const msgResp = await axios.get('/api/v1/customer/messages');
-      setMessages(msgResp.data);
+      const msgResp = await axios.get('/api/v1/customer/messages').catch(() => ({ data: [] }));
+      setMessages(Array.isArray(msgResp.data) ? msgResp.data : []);
 
       // Get Notifications
-      const notifResp = await axios.get('/api/v1/customer/notifications');
-      setNotifications(notifResp.data);
+      const notifResp = await axios.get('/api/v1/customer/notifications').catch(() => ({ data: [] }));
+      setNotifications(Array.isArray(notifResp.data) ? notifResp.data : []);
 
       // Get Reviews
-      const revsResp = await axios.get('/api/v1/customer/reviews');
-      setReviews(revsResp.data);
+      const revsResp = await axios.get('/api/v1/customer/reviews').catch(() => ({ data: [] }));
+      setReviews(Array.isArray(revsResp.data) ? revsResp.data : []);
 
       // Get Rewards Points History & Balance
-      const rewResp = await axios.get('/api/v1/customer/rewards');
+      const rewResp = await axios.get('/api/v1/customer/rewards').catch(() => ({ data: { balance: 50, history: [] } }));
       setPointsHistory(rewResp.data.history || []);
       setDashboardStats(prev => ({ ...prev, pointsBalance: rewResp.data.balance || 50 }));
 
       // Get Referral stats
-      const refResp = await axios.get('/api/v1/customer/referrals');
+      const refResp = await axios.get('/api/v1/customer/referrals').catch(() => ({ data: {} }));
       setReferralsList(refResp.data.invitedFriends || []);
       setReferralStats(refResp.data.statistics || { totalInvited: 0, successfulOrders: 0, totalPointsEarned: 0 });
       setReferralCode(refResp.data.referralCode || '');
       setReferralLink(refResp.data.referralLink || '');
 
       // Compute general summary indicators
-      const activeDeliveries = ordsResp.data.filter((o: any) => ['order_received', 'preparing', 'ready', 'out_for_delivery'].includes(o.status));
+      const activeDeliveries = orderList.filter((o: any) => ['order_received', 'preparing', 'ready', 'out_for_delivery'].includes(o.status));
       setDashboardStats(prev => ({
         ...prev,
         activeDeliveriesCount: activeDeliveries.length,
-        recentOrder: ordsResp.data[0] || null
+        recentOrder: orderList[0] || null
       }));
 
       setLoadingPortal(false);
     } catch (err: any) {
-      console.error(err);
-      setErrorMsg('Failed to synchronize Rift Valley metadata registry.');
+      console.error('Portal sync error:', err);
       setLoadingPortal(false);
     }
   };
@@ -520,144 +503,84 @@ export default function Profile() {
     return orders;
   };
 
+  const unreadNotifsCount = notifications.filter(n => !n.isRead).length;
+  const badgeCounts = {
+    orders: dashboardStats.activeDeliveriesCount,
+    wishlist: wishlistItems.length,
+    notifications: unreadNotifsCount,
+    points: dashboardStats.pointsBalance
+  };
+
   return (
-    <div className="pt-24 pb-20 bg-canvas min-h-screen" id="customer-portal-root">
-      <div className="max-w-7xl mx-auto px-4 md:px-6">
-        
-        {/* Banner greeting card */}
-        <div className="bg-white border border-utility-border rounded-3xl p-6 md:p-8 mb-8 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden" id="portal-greeting-card">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-brand-primary/5 rounded-full blur-3xl -z-10" />
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="text-xs bg-brand-primary/10 text-brand-primary font-bold px-3 py-1 rounded-full uppercase tracking-wider font-mono">
-                Kenya Guild Registry
-              </span>
-              {user.isVerified && (
-                <span className="text-xs bg-utility-success/10 text-brand-primary font-bold px-3 py-1 rounded-full uppercase tracking-wider font-mono">
-                  ✓ Verified Account
-                </span>
-              )}
+    <div className="min-h-screen bg-[#FAF9F6] text-stone-800 flex font-sans antialiased selection:bg-[#2D5A27] selection:text-white" id="customer-portal-root">
+      {/* Editorial Botanical Customer Sidebar */}
+      <CustomerSidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        isCollapsed={isSidebarCollapsed}
+        setIsCollapsed={setIsSidebarCollapsed}
+        isMobileOpen={isMobileSidebarOpen}
+        setIsMobileOpen={setIsMobileSidebarOpen}
+        badgeCounts={badgeCounts}
+      />
+
+      {/* Main Panel Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Sticky Header Bar */}
+        <CustomerHeader
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          unreadNotificationsCount={unreadNotifsCount}
+          pointsBalance={dashboardStats.pointsBalance}
+          onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
+        />
+
+        {/* Main View Area with Smooth Transitions */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
+          {/* Global Success / Error Toast Banners */}
+          <AnimatePresence>
+            {successMsg && (
+              <motion.div
+                initial={{ opacity: 0, y: -16 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -16 }}
+                className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-800 font-semibold flex items-center gap-2.5 mb-6 shadow-xs max-w-7xl mx-auto"
+              >
+                <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+                <span>{successMsg}</span>
+              </motion.div>
+            )}
+
+            {errorMsg && (
+              <motion.div
+                initial={{ opacity: 0, y: -16 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -16 }}
+                className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-800 font-semibold flex items-center gap-2.5 mb-6 shadow-xs max-w-7xl mx-auto"
+              >
+                <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+                <span>{errorMsg}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {loadingPortal ? (
+            <div className="max-w-7xl mx-auto bg-white border border-stone-200/80 rounded-2xl p-16 text-center space-y-4 shadow-xs">
+              <div className="w-10 h-10 border-4 border-[#2D5A27] border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="text-xs text-stone-500 font-semibold uppercase tracking-wider font-mono">
+                Loading your floral concierge portal...
+              </p>
             </div>
-            <h1 className="font-display font-bold text-2xl md:text-3xl tracking-tight text-text-primary">
-              {greeting}, {user.profile.firstName || 'Florist Companion'}!
-            </h1>
-            <p className="text-xs text-text-muted max-w-xl">
-              Manage your volcanic soil bouquets, dynamic cold-chain couriers, reward point ledger balance, and florist logs seamlessly.
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => { window.location.hash = '#/shop'; }}
-              className="px-5 py-3 bg-brand-primary hover:bg-brand-primary-hover text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-md cursor-pointer flex items-center gap-2"
-            >
-              <Compass className="w-4 h-4" />
-              Order Flowers
-            </button>
-            <button
-              onClick={logout}
-              className="px-4 py-3 border border-utility-border hover:bg-canvas rounded-xl text-xs font-bold uppercase tracking-wider text-text-secondary transition-all cursor-pointer flex items-center gap-1.5"
-            >
-              <LogOut className="w-4 h-4 text-brand-secondary" />
-              Sign Out
-            </button>
-          </div>
-        </div>
-
-        {/* Global Success / Error Toast Banners */}
-        <AnimatePresence>
-          {successMsg && (
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="p-4 bg-utility-success/10 border border-utility-success/30 rounded-2xl text-xs text-brand-primary font-semibold flex items-center gap-2 mb-6"
-            >
-              <CheckCircle className="w-5 h-5 text-brand-primary shrink-0" />
-              <span>{successMsg}</span>
-            </motion.div>
-          )}
-
-          {errorMsg && (
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="p-4 bg-utility-error/10 border border-utility-error/30 rounded-2xl text-xs text-brand-secondary font-semibold flex items-center gap-2 mb-6"
-            >
-              <AlertCircle className="w-5 h-5 text-brand-secondary shrink-0" />
-              <span>{errorMsg}</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Main Workspace layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
-          {/* Left Column Navigation Panel (Desktop rail, mobile scroll box) */}
-          <div className="lg:col-span-3 bg-white border border-utility-border rounded-3xl p-5 shadow-xs space-y-2 lg:sticky lg:top-24">
-            <div className="px-3 pb-3 border-b border-utility-border mb-4">
-              <span className="text-[10px] uppercase tracking-wider font-bold text-text-muted">Account Navigation</span>
-            </div>
-            
-            {/* Desktop and responsive list layout */}
-            <div className="flex lg:flex-col gap-1 overflow-x-auto pb-2 lg:pb-0 scrollbar-none shrink-0">
-              {[
-                { id: 'overview', label: 'Overview Hub', icon: User },
-                { id: 'orders', label: 'Orders & Tracking', icon: Truck, badge: dashboardStats.activeDeliveriesCount },
-                { id: 'wishlist', label: 'Wishlist Favs', icon: Heart, badge: wishlistItems.length },
-                { id: 'addresses', label: 'Saved Addresses', icon: MapPin },
-                { id: 'inbox', label: 'Guild Inbox', icon: MessageSquare },
-                { id: 'notifications', label: 'Alert Inbox', icon: Bell, badge: notifications.filter(n => !n.isRead).length },
-                { id: 'reviews', label: 'Reviews & Feedback', icon: Star },
-                { id: 'rewards', label: 'Loyalty & Invites', icon: Award },
-                { id: 'settings', label: 'Security Settings', icon: Settings },
-              ].map((tab) => {
-                const IconComp = tab.icon;
-                const isSelected = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => { setActiveTab(tab.id); setSelectedOrder(null); }}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer text-left ${
-                      isSelected
-                        ? 'bg-brand-primary text-white shadow-md'
-                        : 'text-text-secondary hover:bg-canvas hover:text-text-primary'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <IconComp className={`w-4 h-4 ${isSelected ? 'text-white' : 'text-text-muted'}`} />
-                      <span className="whitespace-nowrap">{tab.label}</span>
-                    </div>
-                    {tab.badge !== undefined && tab.badge > 0 && (
-                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-mono font-bold ${
-                        isSelected ? 'bg-white text-brand-primary' : 'bg-brand-primary/10 text-brand-primary'
-                      }`}>
-                        {tab.badge}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Right Column workspace (Content display box) */}
-          <div className="lg:col-span-9 space-y-6" id="portal-content-workspace">
-            
-            {loadingPortal ? (
-              <div className="bg-white border border-utility-border rounded-3xl p-16 text-center space-y-4">
-                <div className="w-10 h-10 border-4 border-brand-primary border-t-transparent rounded-full animate-spin mx-auto" />
-                <p className="text-xs text-text-secondary font-semibold uppercase tracking-wider font-mono">Synchronizing Rift Valley floriculture telemetry...</p>
-              </div>
-            ) : (
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={activeTab}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.2 }}
-                >
+          ) : (
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.2 }}
+                className="max-w-7xl mx-auto space-y-6"
+              >
                   
                   {/* TAB 1: OVERVIEW HUB */}
                   {activeTab === 'overview' && (
@@ -920,50 +843,58 @@ export default function Profile() {
                                 </div>
                               </div>
 
-                              {/* Right dynamic courier map simulation */}
+                              {/* Right courier delivery logistics card */}
                               <div className="lg:col-span-7 space-y-4">
                                 <div className="flex justify-between items-center">
-                                  <h4 className="text-xs uppercase tracking-wider font-bold text-text-muted font-display">Live Metropolitan Logistics Radar</h4>
-                                  <span className="text-[10px] text-brand-primary font-bold animate-pulse font-mono">GPS ACTIVE</span>
+                                  <h4 className="text-xs uppercase tracking-wider font-bold text-text-muted font-display">Courier Delivery Information</h4>
+                                  <span className="text-[10px] text-brand-primary font-bold font-mono px-2 py-0.5 bg-brand-primary/10 rounded-md">
+                                    {selectedOrder.status === 'delivered' ? 'DELIVERED' : 'IN PROGRESS'}
+                                  </span>
                                 </div>
 
-                                {/* Mock Nairobi Map Container */}
-                                <div className="h-52 bg-brand-primary/5 rounded-2xl border border-brand-primary/10 relative overflow-hidden flex items-center justify-center">
-                                  <svg className="absolute inset-0 w-full h-full text-brand-primary/10 opacity-30" viewBox="0 0 100 100">
-                                    <path d="M10,10 L30,40 L80,20 L50,90 Z" fill="none" stroke="currentColor" strokeWidth="0.5" />
-                                    <path d="M20,70 L50,40 L90,80 Z" fill="none" stroke="currentColor" strokeWidth="0.5" />
-                                    <circle cx="30" cy="40" r="1.5" fill="currentColor" />
-                                    <circle cx="80" cy="20" r="1.5" fill="currentColor" />
-                                    <circle cx="50" cy="90" r="1.5" fill="currentColor" />
-                                  </svg>
-                                  
-                                  {/* Map labels */}
-                                  <span className="absolute top-4 left-4 text-[9px] font-bold text-text-muted font-mono uppercase">Westlands Hub</span>
-                                  <span className="absolute bottom-6 right-10 text-[9px] font-bold text-text-muted font-mono uppercase">CBD Centre</span>
-                                  <span className="absolute top-10 right-8 text-[9px] font-bold text-text-muted font-mono uppercase">Parklands Workshop</span>
-
-                                  {/* Active Moving Logistics Vehicle Pin */}
-                                  {selectedOrder.status !== 'delivered' && selectedOrder.status !== 'cancelled' ? (
-                                    <motion.div
-                                      animate={{ x: mapTruckPos.x * 2.5, y: mapTruckPos.y * 1.5 }}
-                                      className="absolute w-8 h-8 bg-brand-primary text-white rounded-full flex items-center justify-center shadow-lg border-2 border-white z-10"
-                                    >
-                                      <Truck className="w-4 h-4" />
-                                    </motion.div>
-                                  ) : (
-                                    <div className="absolute w-8 h-8 bg-utility-success text-brand-primary rounded-full flex items-center justify-center shadow-md border-2 border-white">
-                                      <Check className="w-4 h-4 text-white" />
+                                <div className="bg-canvas border border-utility-border rounded-2xl p-5 space-y-4">
+                                  <div className="flex items-center gap-3 pb-3 border-b border-utility-border/60">
+                                    <div className="w-10 h-10 rounded-xl bg-brand-primary/10 text-brand-primary flex items-center justify-center shrink-0">
+                                      <Truck className="w-5 h-5" />
                                     </div>
-                                  )}
-                                  
-                                  <div className="absolute bottom-3 left-3 bg-white/95 border border-utility-border p-2 rounded-lg text-[9px] space-y-0.5">
-                                    <p className="font-bold text-text-primary">Shipment Temperature: 4.1°C</p>
-                                    <p className="text-text-muted">Metropolitan Speed: 42 km/h</p>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="text-xs font-bold text-text-primary">
+                                        {selectedOrder.deliveryPartner || 'Direct Florist Courier Fleet'}
+                                      </div>
+                                      <div className="text-[11px] text-text-muted">
+                                        Dedicated floral handling • Climate controlled transport
+                                      </div>
+                                    </div>
                                   </div>
-                                </div>
 
-                                <div className="p-3 bg-canvas border border-utility-border rounded-xl text-[11px] text-text-secondary leading-relaxed">
-                                  🚚 <strong>Logistics dispatch:</strong> Sourced via {selectedOrder.deliveryPartner}. Courier terminal temperature has been locked to prolong highlands bouquet life.
+                                  <div className="grid grid-cols-2 gap-3 text-xs">
+                                    <div className="p-3 bg-white rounded-xl border border-utility-border/60 space-y-1">
+                                      <span className="text-[10px] uppercase font-bold text-text-muted font-display block">Destination</span>
+                                      <p className="font-semibold text-text-primary text-[11px] truncate">
+                                        {selectedOrder.deliveryAddress?.streetAddress || 'Customer Address'}
+                                      </p>
+                                      <p className="text-[10px] text-text-muted">
+                                        {selectedOrder.deliveryAddress?.city || 'Nairobi, Kenya'}
+                                      </p>
+                                    </div>
+
+                                    <div className="p-3 bg-white rounded-xl border border-utility-border/60 space-y-1">
+                                      <span className="text-[10px] uppercase font-bold text-text-muted font-display block">Scheduled Delivery</span>
+                                      <p className="font-semibold text-text-primary text-[11px]">
+                                        {selectedOrder.deliveryDate || 'Standard Delivery'}
+                                      </p>
+                                      <p className="text-[10px] text-text-muted">
+                                        {selectedOrder.deliverySlot || 'Between 9:00 AM - 6:00 PM'}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <div className="p-3 bg-brand-primary/5 border border-brand-primary/15 rounded-xl text-[11px] text-text-secondary leading-relaxed flex items-center gap-2">
+                                    <ShieldCheck className="w-4 h-4 text-brand-primary shrink-0" />
+                                    <span>
+                                      Freshness guarantee: Hand-arranged stems conditioned in preservative water solution for doorstep presentation.
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
 
@@ -1951,11 +1882,7 @@ export default function Profile() {
                 </motion.div>
               </AnimatePresence>
             )}
-
-          </div>
-
-        </div>
-
+        </main>
       </div>
 
       {/* Permanent account purging secure warning popup */}

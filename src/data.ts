@@ -22,7 +22,7 @@ export const MOCK_FLORISTS: Florist[] = [
   {
     id: 'f2',
     name: 'Rift Valley Roses',
-    logo: 'https://images.unsplash.com/photo-1533750349088-cd871a92f311?w=200&auto=format&fit=crop&q=80',
+    logo: 'https://images.unsplash.com/photo-1563241527-3004b7be0ffd?w=200&auto=format&fit=crop&q=80',
     banner: 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=1200&auto=format&fit=crop&q=80',
     location: 'Naivasha',
     rating: 4.8,

@@ -74,15 +74,43 @@ interface AuthContextType {
   moderateProduct: (id: string, payload: any) => Promise<void>;
   moderateReview: (id: string, action: string) => Promise<void>;
   createCoupon: (data: any) => Promise<void>;
+  toggleCouponStatus: (id: string) => Promise<void>;
+  deleteCoupon: (id: string) => Promise<void>;
   createCategory: (data: any) => Promise<void>;
   updateSystemConfig: (config: any) => Promise<void>;
-  createAdministrator: (data: any) => Promise<void>;
+  createAdministrator: (data: any) => Promise<any>;
+  toggleAdminStatus: (id: string) => Promise<void>;
+  resetAdminPassword: (id: string) => Promise<string>;
+  deleteAdministrator: (id: string) => Promise<void>;
+  fetchSystemHealth: () => Promise<any>;
   updateCMSSection: (section: string, data: any) => Promise<void>;
   broadcastNotification: (data: any) => Promise<void>;
   fetchAIAdminInsights: (queryType: string) => Promise<string>;
+  fetchFloristDetail: (id: string) => Promise<any>;
+  fetchUserDetail: (id: string) => Promise<any>;
+  fetchOrderDetail: (id: string) => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Ensure Axios has default Authorization header immediately on module load if available
+if (typeof window !== 'undefined') {
+  const initialToken = localStorage.getItem('florax_token');
+  if (initialToken) {
+    axios.defaults.headers.common['Authorization'] = `Bearer ${initialToken}`;
+  }
+}
+
+// Request interceptor to ensure all outgoing requests carry the token
+axios.interceptors.request.use((config) => {
+  if (typeof window !== 'undefined') {
+    const currentToken = localStorage.getItem('florax_token');
+    if (currentToken && !config.headers.Authorization) {
+      config.headers.Authorization = `Bearer ${currentToken}`;
+    }
+  }
+  return config;
+});
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
@@ -242,19 +270,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // FETCH ADDRESSES
   const fetchAddresses = async () => {
-    if (!token) return;
+    const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem('florax_token') : null);
+    if (!activeToken) {
+      setAddresses([]);
+      return;
+    }
     try {
-      const resp = await axios.get('/api/v1/customer/addresses');
-      setAddresses(resp.data);
-    } catch (err) {
-      console.error('Error fetching addresses:', err);
+      const resp = await axios.get('/api/v1/customer/addresses', {
+        headers: { Authorization: `Bearer ${activeToken}` }
+      });
+      setAddresses(Array.isArray(resp.data) ? resp.data : []);
+    } catch (err: any) {
+      if (err.response?.status === 401 || err.response?.status === 404) {
+        setAddresses([]);
+      } else {
+        console.warn('Addresses could not be fetched:', err.message);
+        setAddresses([]);
+      }
     }
   };
 
   // ADD ADDRESS
   const addAddress = async (addressData: any) => {
+    const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem('florax_token') : null);
     try {
-      await axios.post('/api/v1/customer/addresses', addressData);
+      await axios.post('/api/v1/customer/addresses', addressData, {
+        headers: activeToken ? { Authorization: `Bearer ${activeToken}` } : {}
+      });
       await fetchAddresses();
     } catch (err: any) {
       throw new Error(err.response?.data?.error || 'Failed to save address.');
@@ -469,6 +511,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // TOGGLE COUPON STATUS
+  const toggleCouponStatus = async (id: string) => {
+    try {
+      await axios.post(`/api/v1/admin/coupons/${id}/toggle`);
+      await fetchAdminData();
+    } catch (err: any) {
+      throw new Error(err.response?.data?.error || 'Coupon status toggle failed.');
+    }
+  };
+
+  // DELETE COUPON
+  const deleteCoupon = async (id: string) => {
+    try {
+      await axios.delete(`/api/v1/admin/coupons/${id}`);
+      await fetchAdminData();
+    } catch (err: any) {
+      throw new Error(err.response?.data?.error || 'Coupon deletion failed.');
+    }
+  };
+
+  // FETCH FLORIST DETAIL
+  const fetchFloristDetail = async (id: string) => {
+    try {
+      const resp = await axios.get(`/api/v1/admin/florists/${id}`);
+      return resp.data;
+    } catch (err: any) {
+      throw new Error(err.response?.data?.error || 'Failed to fetch florist details.');
+    }
+  };
+
+  // FETCH USER DETAIL
+  const fetchUserDetail = async (id: string) => {
+    try {
+      const resp = await axios.get(`/api/v1/admin/users/${id}`);
+      return resp.data;
+    } catch (err: any) {
+      throw new Error(err.response?.data?.error || 'Failed to fetch user profile.');
+    }
+  };
+
+  // FETCH ORDER DETAIL
+  const fetchOrderDetail = async (id: string) => {
+    try {
+      const resp = await axios.get(`/api/v1/admin/orders/${id}`);
+      return resp.data;
+    } catch (err: any) {
+      throw new Error(err.response?.data?.error || 'Failed to fetch order details.');
+    }
+  };
+
   // CREATE CATEGORY
   const createCategory = async (data: any) => {
     try {
@@ -492,10 +584,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // CREATE ADMINISTRATOR
   const createAdministrator = async (data: any) => {
     try {
-      await axios.post('/api/v1/admin/administrators', data);
+      const resp = await axios.post('/api/v1/admin/administrators', data);
       await fetchAdminData();
+      return resp.data;
     } catch (err: any) {
       throw new Error(err.response?.data?.error || 'Administrator creation failed.');
+    }
+  };
+
+  // TOGGLE ADMIN STATUS
+  const toggleAdminStatus = async (id: string) => {
+    try {
+      await axios.post(`/api/v1/admin/administrators/${id}/status`);
+      await fetchAdminData();
+    } catch (err: any) {
+      throw new Error(err.response?.data?.error || 'Failed to update administrator status.');
+    }
+  };
+
+  // RESET ADMIN PASSWORD
+  const resetAdminPassword = async (id: string): Promise<string> => {
+    try {
+      const resp = await axios.post(`/api/v1/admin/administrators/${id}/reset-password`);
+      await fetchAdminData();
+      return resp.data.tempPassword || resp.data.message;
+    } catch (err: any) {
+      throw new Error(err.response?.data?.error || 'Failed to reset administrator password.');
+    }
+  };
+
+  // DELETE ADMINISTRATOR
+  const deleteAdministrator = async (id: string) => {
+    try {
+      await axios.delete(`/api/v1/admin/administrators/${id}`);
+      await fetchAdminData();
+    } catch (err: any) {
+      throw new Error(err.response?.data?.error || 'Failed to remove administrator.');
+    }
+  };
+
+  // FETCH SYSTEM HEALTH
+  const fetchSystemHealth = async () => {
+    try {
+      const resp = await axios.get('/api/v1/admin/system/health');
+      return resp.data;
+    } catch (err: any) {
+      throw new Error(err.response?.data?.error || 'Failed to fetch system health telemetry.');
     }
   };
 
@@ -575,12 +709,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       moderateProduct,
       moderateReview,
       createCoupon,
+      toggleCouponStatus,
+      deleteCoupon,
       createCategory,
       updateSystemConfig,
       createAdministrator,
+      toggleAdminStatus,
+      resetAdminPassword,
+      deleteAdministrator,
+      fetchSystemHealth,
       updateCMSSection,
       broadcastNotification,
-      fetchAIAdminInsights
+      fetchAIAdminInsights,
+      fetchFloristDetail,
+      fetchUserDetail,
+      fetchOrderDetail
     }}>
       {children}
     </AuthContext.Provider>

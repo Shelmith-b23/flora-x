@@ -9,6 +9,7 @@ import { Florists } from './pages/Florists';
 import { FloristProfile } from './pages/FloristProfile';
 import { NotFound } from './pages/NotFound';
 import { QuickViewModal } from './components/QuickViewModal';
+import { FlowerFinder } from './components/FlowerFinder';
 
 // Auth and Profile Pages
 import Login from './pages/Login';
@@ -80,6 +81,12 @@ export default function App() {
         return <Shop />;
       case '#/florists':
         return <Florists />;
+      case '#/flower-finder':
+        return (
+          <div className="max-w-7xl mx-auto px-6 py-12">
+            <FlowerFinder />
+          </div>
+        );
       case '#/about':
         return <About />;
       case '#/reviews':

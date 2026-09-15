@@ -113,7 +113,7 @@ export default function FloristPortal() {
                   onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
                 />
               )}
-              {activeTab === 'reviews' && <ReviewsView />}
+              {activeTab === 'reviews' && <ReviewsView verificationStatus={verificationStatus} />}
               {activeTab === 'discounts' && <DiscountsView verificationStatus={verificationStatus} />}
               {activeTab === 'wallet' && (
                 <WalletView

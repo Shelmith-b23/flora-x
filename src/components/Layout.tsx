@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ShoppingBag, Heart, Menu, X, Trash2, CheckCircle, Smartphone, CreditCard, Landmark, MapPin, Sparkles, Smile, Star, Phone, Mail, ArrowRight, Compass, LogOut, ShieldCheck } from 'lucide-react';
+import { ShoppingBag, Heart, Menu, X, Trash2, CheckCircle, Smartphone, CreditCard, Landmark, MapPin, Sparkles, Smile, Star, Phone, Mail, ArrowRight, Compass, LogOut, ShieldCheck, Search, User } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { MOCK_PRODUCTS } from '../data';
+import { SearchModal } from './SearchModal';
 import axios from 'axios';
 
 interface LayoutProps {
@@ -26,8 +27,22 @@ export function Layout({ children }: LayoutProps) {
 
   const { user, logout } = useAuth();
 
+  const [currentHash, setCurrentHash] = useState(() => window.location.hash);
+
+  useEffect(() => {
+    const handleHashChange = () => setCurrentHash(window.location.hash);
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  const isFloristDashboard = currentHash.startsWith('#/florist-portal');
+  const isCustomerDashboard = currentHash.startsWith('#/profile');
+  const isAdminDashboard = currentHash.startsWith('#/admin') && !currentHash.includes('login');
+  const isDedicatedPortal = isFloristDashboard || isCustomerDashboard || isAdminDashboard;
+
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [checkoutStep, setCheckoutStep] = useState<'cart' | 'payment' | 'processing' | 'success'>('cart');
   const [mpesaPhone, setMpesaPhone] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'mpesa' | 'card'>('mpesa');
@@ -36,15 +51,17 @@ export function Layout({ children }: LayoutProps) {
   const [recipientPhone, setRecipientPhone] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [deliveryDate, setDeliveryDate] = useState(() => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return tomorrow.toISOString().split('T')[0];
+    const today = new Date();
+    return today.toISOString().split('T')[0];
   });
+  const [deliverySlot, setDeliverySlot] = useState('Morning (09:00 - 12:00)');
   const [deliveryInstructions, setDeliveryInstructions] = useState('');
+  const [cardMessage, setCardMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [parentOrderId, setParentOrderId] = useState('');
+  const [mpesaReceiptNumber, setMpesaReceiptNumber] = useState('');
 
-  // Sync recipient and phone from user profile
+  // Sync recipient and phone from user profile & addresses
   useEffect(() => {
     if (user) {
       if (!recipientName && user.profile) {
@@ -56,8 +73,26 @@ export function Layout({ children }: LayoutProps) {
       if (!mpesaPhone && user.profile) {
         setMpesaPhone(user.profile.phoneNumber || '');
       }
+      axios.get('/api/v1/customer/addresses').then((res) => {
+        if (res.data && res.data.length > 0 && !deliveryAddress) {
+          const def = res.data.find((a: any) => a.isDefault) || res.data[0];
+          if (def) {
+            setDeliveryAddress(`${def.streetAddress}, ${def.city}`);
+          }
+        }
+      }).catch(() => {});
     }
   }, [user]);
+
+  // Sync delivery parameters from cart items
+  useEffect(() => {
+    const itemWithDate = cart.find((i) => i.deliveryDate);
+    if (itemWithDate?.deliveryDate) setDeliveryDate(itemWithDate.deliveryDate);
+    const itemWithSlot = cart.find((i) => i.deliverySlot);
+    if (itemWithSlot?.deliverySlot) setDeliverySlot(itemWithSlot.deliverySlot);
+    const itemWithMessage = cart.find((i) => i.cardMessage);
+    if (itemWithMessage?.cardMessage) setCardMessage(itemWithMessage.cardMessage);
+  }, [cart]);
 
   // Scroll listener for sticky header styling
   useEffect(() => {
@@ -79,10 +114,29 @@ export function Layout({ children }: LayoutProps) {
     return sum + itemPrice * item.quantity;
   }, 0);
 
-  // Group items by florist to compute multi-vendor delivery fees
-  const uniqueFloristIds = Array.from(new Set(cart.map((item) => item.product.floristId)));
-  const baseDeliveryFee = 350; // flat KES fee per florist
-  const totalDeliveryFee = uniqueFloristIds.length * baseDeliveryFee;
+  // Group items by florist for transparent, customer-friendly multi-vendor ordering
+  const floristGroups = useMemo(() => {
+    const groups: { [floristId: string]: { floristId: string; floristName: string; items: typeof cart; subtotal: number; deliveryFee: number } } = {};
+    cart.forEach((item) => {
+      const fId = item.product.floristId || 'florist-1';
+      if (!groups[fId]) {
+        groups[fId] = {
+          floristId: fId,
+          floristName: item.product.floristName || 'Flora_X Master Florist',
+          items: [],
+          subtotal: 0,
+          deliveryFee: item.product.deliveryFeeStandard ?? 350,
+        };
+      }
+      const sizePriceAdjustment = { Standard: 0, Deluxe: 1500, Grandee: 3000 };
+      const itemPrice = item.product.price + sizePriceAdjustment[item.size];
+      groups[fId].items.push(item);
+      groups[fId].subtotal += itemPrice * item.quantity;
+    });
+    return Object.values(groups);
+  }, [cart]);
+
+  const totalDeliveryFee = floristGroups.reduce((acc, g) => acc + g.deliveryFee, 0);
   const finalTotal = cartSubtotal + totalDeliveryFee;
 
   const handleCheckoutSubmit = async (e: React.FormEvent) => {
@@ -91,11 +145,15 @@ export function Layout({ children }: LayoutProps) {
 
     if (checkoutStep === 'cart') {
       if (!user) {
-        setErrorMessage('You must be logged in to checkout.');
+        setErrorMessage('Please sign in or create an account to proceed with checkout.');
         return;
       }
       setCheckoutStep('payment');
     } else if (checkoutStep === 'payment') {
+      if (!user) {
+        setErrorMessage('Please sign in to complete payment.');
+        return;
+      }
       if (!recipientName || !recipientPhone || !deliveryAddress || !deliveryDate) {
         setErrorMessage('All delivery fields are required.');
         return;
@@ -104,19 +162,33 @@ export function Layout({ children }: LayoutProps) {
       setCheckoutStep('processing');
 
       try {
-        // Step 1: Create Checkout Session
+        // Step 1: Create Checkout Session with real prices, florist IDs, and multi-vendor delivery fees
         const createResp = await axios.post('/api/v1/checkout/create-session', {
           recipient_name: recipientName,
           recipient_phone: recipientPhone,
           delivery_address: deliveryAddress,
           delivery_date: deliveryDate,
           delivery_instructions: deliveryInstructions,
-          items: cart.map(item => ({
-            product_id: item.product.id,
-            size: item.size,
-            quantity: item.quantity,
-            cardMessage: item.cardMessage
-          }))
+          delivery_slot: deliverySlot,
+          card_message: cardMessage,
+          items: cart.map((item) => {
+            const sizePriceAdjustment = { Standard: 0, Deluxe: 1500, Grandee: 3000 };
+            const itemUnit = item.product.price + sizePriceAdjustment[item.size];
+            return {
+              product_id: item.product.id,
+              title: item.product.title,
+              image: item.product.images?.[0],
+              size: item.size,
+              quantity: item.quantity,
+              unitPrice: itemUnit,
+              floristId: item.product.floristId || 'florist-1',
+              floristName: item.product.floristName || 'Flora_X Master Florist',
+              deliveryFee: item.product.deliveryFeeStandard ?? 350,
+              cardMessage: item.cardMessage || cardMessage,
+              deliveryDate: item.deliveryDate || deliveryDate,
+              deliverySlot: item.deliverySlot || deliverySlot,
+            };
+          }),
         });
 
         if (createResp.data.success) {
@@ -127,7 +199,7 @@ export function Layout({ children }: LayoutProps) {
           if (paymentMethod === 'mpesa') {
             const payResp = await axios.post('/api/v1/checkout/pay-mpesa', {
               parent_order_id: parentOrdId,
-              mpesa_phone: mpesaPhone || recipientPhone
+              mpesa_phone: mpesaPhone || recipientPhone,
             });
 
             if (payResp.data.success) {
@@ -139,6 +211,8 @@ export function Layout({ children }: LayoutProps) {
                   const verifyResp = await axios.get(`/api/v1/checkout/verify/${parentOrdId}`);
                   if (verifyResp.data.success && verifyResp.data.data.payment_status === 'paid') {
                     clearInterval(interval);
+                    setMpesaReceiptNumber(verifyResp.data.data.mpesa_receipt_number || 'SHK882193XA');
+                    clearCart();
                     setCheckoutStep('success');
                   } else if (verifyResp.data.success && verifyResp.data.data.payment_status === 'failed') {
                     clearInterval(interval);
@@ -153,7 +227,7 @@ export function Layout({ children }: LayoutProps) {
                 if (pollCount > 15) {
                   clearInterval(interval);
                   setCheckoutStep('payment');
-                  setErrorMessage('Payment confirmation timed out. Please check your transaction list later.');
+                  setErrorMessage('Payment confirmation timed out. If you entered your PIN, your order will be confirmed shortly.');
                 }
               }, 2000);
             } else {
@@ -161,10 +235,23 @@ export function Layout({ children }: LayoutProps) {
               setErrorMessage(payResp.data.error?.message || 'Failed to initialize M-Pesa transaction.');
             }
           } else {
-            // Simulated Card Checkout Success
-            setTimeout(() => {
-              setCheckoutStep('success');
-            }, 3000);
+            // Real Card Payment via backend endpoint
+            try {
+              const cardResp = await axios.post('/api/v1/checkout/pay-card', {
+                parent_order_id: parentOrdId,
+              });
+              if (cardResp.data.success) {
+                setMpesaReceiptNumber(cardResp.data.data?.receipt_number || 'CRD-AUTH');
+                clearCart();
+                setCheckoutStep('success');
+              } else {
+                setCheckoutStep('payment');
+                setErrorMessage(cardResp.data.error?.message || 'Card payment authorization failed.');
+              }
+            } catch (cardErr: any) {
+              setCheckoutStep('payment');
+              setErrorMessage(cardErr.response?.data?.error?.message || 'Card payment failed.');
+            }
           }
         } else {
           setCheckoutStep('payment');
@@ -187,8 +274,10 @@ export function Layout({ children }: LayoutProps) {
     setRecipientPhone('');
     setDeliveryAddress('');
     setDeliveryInstructions('');
+    setCardMessage('');
     setErrorMessage('');
     setParentOrderId('');
+    setMpesaReceiptNumber('');
   };
 
   const wishlistedProducts = MOCK_PRODUCTS.filter((p) => wishlist.includes(p.id));
@@ -218,6 +307,11 @@ export function Layout({ children }: LayoutProps) {
     window.location.hash = '#/';
   };
 
+  // If on Florist or Customer Dashboard, strip out the consumer marketplace navigation header and footer
+  if (isDedicatedPortal) {
+    return <>{children}</>;
+  }
+
   return (
     <div className="min-h-screen flex flex-col font-sans bg-canvas text-text-primary" id="layout-wrapper">
       {/* 1. Header Navigation */}
@@ -244,19 +338,27 @@ export function Layout({ children }: LayoutProps) {
           </div>
 
           {/* Desktop Navigation Links */}
-          <nav className="hidden lg:flex items-center gap-8 text-xs font-bold uppercase tracking-wider text-text-secondary">
-            <span onClick={() => { window.location.hash = '#/shop'; }} className="hover:text-brand-primary transition-colors cursor-pointer">Shop Catalog</span>
-            <span onClick={() => { window.location.hash = '#/florists'; }} className="hover:text-brand-primary transition-colors cursor-pointer">Florists Guild</span>
+          <nav className="hidden lg:flex items-center gap-7 text-xs font-semibold uppercase tracking-wider text-text-secondary">
+            <span onClick={() => { window.location.hash = '#/'; }} className="hover:text-brand-primary transition-colors cursor-pointer">Home</span>
+            <span onClick={() => { window.location.hash = '#/shop'; }} className="hover:text-brand-primary transition-colors cursor-pointer">Shop</span>
             <span onClick={() => { window.location.hash = '#/occasions'; }} className="hover:text-brand-primary transition-colors cursor-pointer">Occasions</span>
-            <span onClick={() => { window.location.hash = '#/categories'; }} className="hover:text-brand-primary transition-colors cursor-pointer">Varieties</span>
-            <span onClick={() => { window.location.hash = '#/blog'; }} className="hover:text-brand-primary transition-colors cursor-pointer">Journal</span>
-            <span onClick={() => { window.location.hash = '#/about'; }} className="hover:text-brand-primary transition-colors cursor-pointer">Our Roots</span>
-            <span onClick={() => { window.location.hash = '#/faq'; }} className="hover:text-brand-primary transition-colors cursor-pointer">FAQ</span>
-            <span onClick={() => { window.location.hash = '#/become-a-florist'; }} className="hover:text-brand-secondary transition-colors cursor-pointer text-brand-primary font-bold">Join Guild</span>
+            <span onClick={() => { window.location.hash = '#/flower-finder'; }} className="hover:text-brand-primary transition-colors cursor-pointer text-brand-primary font-bold">Flower Finder</span>
+            <span onClick={() => { window.location.hash = '#/florists'; }} className="hover:text-brand-primary transition-colors cursor-pointer">Florists</span>
           </nav>
 
           {/* User Controls */}
-          <div className="flex items-center gap-3 md:gap-4">
+          <div className="flex items-center gap-2 md:gap-3">
+            {/* Search Trigger */}
+            <button
+              onClick={() => setIsSearchModalOpen(true)}
+              className="p-2 rounded-full hover:bg-canvas text-text-primary hover:text-brand-primary transition-all active:scale-95 cursor-pointer"
+              aria-label="Search Catalog"
+              id="header-search-toggle"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+
+            {/* Wishlist Trigger */}
             <button
               onClick={() => setWishlistOpen(true)}
               className="relative p-2 rounded-full hover:bg-canvas text-text-primary hover:text-brand-primary transition-all active:scale-95 cursor-pointer"
@@ -271,6 +373,7 @@ export function Layout({ children }: LayoutProps) {
               )}
             </button>
 
+            {/* Cart Trigger */}
             <button
               onClick={() => setCartOpen(true)}
               className="relative p-2 rounded-full hover:bg-canvas text-text-primary hover:text-brand-primary transition-all active:scale-95 cursor-pointer"
@@ -285,47 +388,52 @@ export function Layout({ children }: LayoutProps) {
               )}
             </button>
 
+            {/* Account CTA */}
             {user ? (
               <div className="hidden sm:flex items-center gap-2">
                 <button
                   onClick={() => {
                     if (user.role === 'admin' || user.role === 'super_admin') {
                       window.location.hash = '#/admin';
-                    } else if (user.role === 'florist' && !user.floristStatus) {
-                      window.location.hash = '#/register/florist';
-                    } else if (user.role === 'florist' && user.floristStatus === 'pending_review') {
-                      window.location.hash = '#/pending-approval';
+                    } else if (user.role === 'florist') {
+                      if (!user.floristStatus) {
+                        window.location.hash = '#/register/florist';
+                      } else if (user.floristStatus === 'pending_review') {
+                        window.location.hash = '#/pending-approval';
+                      } else {
+                        window.location.hash = '#/florist-portal';
+                      }
                     } else {
                       window.location.hash = '#/profile';
                     }
                   }}
-                  className="px-3.5 py-2 border border-brand-primary bg-brand-primary/5 rounded-lg text-xs font-bold uppercase tracking-wider text-brand-primary cursor-pointer transition-all hover:bg-brand-primary/10 flex items-center gap-1.5"
+                  className="px-3 py-1.5 border border-brand-primary bg-brand-primary/5 rounded-lg text-xs font-semibold uppercase tracking-wider text-brand-primary cursor-pointer transition-all hover:bg-brand-primary/10 flex items-center gap-1.5"
                 >
-                  <span className="w-2 h-2 rounded-full bg-brand-primary animate-pulse" />
-                  {user.profile.firstName || 'My Profile'}
+                  <User className="w-3.5 h-3.5" />
+                  <span>{user.profile.firstName || 'Account'}</span>
                 </button>
                 <button
                   onClick={logout}
-                  className="px-3.5 py-2 border border-utility-border text-text-secondary hover:text-brand-secondary hover:border-brand-secondary/40 rounded-lg cursor-pointer hover:bg-canvas transition-all flex items-center gap-1.5 font-bold text-xs uppercase tracking-wider"
+                  className="p-2 border border-utility-border text-text-secondary hover:text-brand-secondary hover:border-brand-secondary/40 rounded-lg cursor-pointer hover:bg-canvas transition-all"
                   title="Sign Out"
                 >
-                  <LogOut className="w-4 h-4" />
-                  <span>Log Out</span>
+                  <LogOut className="w-3.5 h-3.5" />
                 </button>
               </div>
             ) : (
               <button
                 onClick={() => { window.location.hash = '#/login'; }}
-                className="hidden sm:block px-4 py-2 bg-brand-primary text-white hover:bg-brand-primary-hover font-bold text-xs uppercase tracking-wider rounded-md transition-all cursor-pointer"
+                className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 bg-brand-primary text-white hover:bg-brand-primary-hover font-semibold text-xs uppercase tracking-wider rounded-lg transition-all cursor-pointer shadow-xs"
               >
-                Sign In
+                <User className="w-3.5 h-3.5" />
+                <span>Account</span>
               </button>
             )}
 
             {/* Hamburger Button */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="lg:hidden p-2 text-text-primary hover:text-brand-primary focus:outline-hidden"
+              className="lg:hidden p-2 text-text-primary hover:text-brand-primary focus:outline-hidden cursor-pointer"
               aria-label="Menu"
             >
               {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -343,54 +451,72 @@ export function Layout({ children }: LayoutProps) {
               className="lg:hidden bg-white border-b border-utility-border shadow-md overflow-hidden shrink-0"
               id="mobile-navigation"
             >
-              <div className="px-6 py-4 flex flex-col gap-3 text-xs font-bold uppercase tracking-wider text-text-secondary">
-                <span
-                  onClick={() => { window.location.hash = '#/shop'; setIsMobileMenuOpen(false); }}
-                  className="py-2 border-b border-utility-border/5 hover:text-brand-primary cursor-pointer block"
+              <div className="px-6 py-4 flex flex-col gap-3 text-xs font-semibold uppercase tracking-wider text-text-secondary">
+                <button
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    setIsSearchModalOpen(true);
+                  }}
+                  className="py-2.5 px-3 rounded-lg bg-canvas text-text-secondary flex items-center gap-2 cursor-pointer text-left"
                 >
-                  Shop Catalog
+                  <Search className="w-4 h-4 text-brand-primary" />
+                  <span>Search arrangements, florists...</span>
+                </button>
+
+                <span
+                  onClick={() => { window.location.hash = '#/'; setIsMobileMenuOpen(false); }}
+                  className="py-2 border-b border-utility-border/40 hover:text-brand-primary cursor-pointer block"
+                >
+                  Home
                 </span>
                 <span
-                  onClick={() => { window.location.hash = '#/florists'; setIsMobileMenuOpen(false); }}
-                  className="py-2 border-b border-utility-border/5 hover:text-brand-primary cursor-pointer block"
+                  onClick={() => { window.location.hash = '#/shop'; setIsMobileMenuOpen(false); }}
+                  className="py-2 border-b border-utility-border/40 hover:text-brand-primary cursor-pointer block"
                 >
-                  Florists Guild
+                  Shop
                 </span>
                 <span
                   onClick={() => { window.location.hash = '#/occasions'; setIsMobileMenuOpen(false); }}
-                  className="py-2 border-b border-utility-border/5 hover:text-brand-primary cursor-pointer block"
+                  className="py-2 border-b border-utility-border/40 hover:text-brand-primary cursor-pointer block"
                 >
                   Occasions
                 </span>
                 <span
-                  onClick={() => { window.location.hash = '#/categories'; setIsMobileMenuOpen(false); }}
-                  className="py-2 border-b border-utility-border/5 hover:text-brand-primary cursor-pointer block"
+                  onClick={() => { window.location.hash = '#/flower-finder'; setIsMobileMenuOpen(false); }}
+                  className="py-2 border-b border-utility-border/40 text-brand-primary font-bold cursor-pointer block"
                 >
-                  Flower Varieties
+                  Flower Finder
                 </span>
                 <span
-                  onClick={() => { window.location.hash = '#/blog'; setIsMobileMenuOpen(false); }}
-                  className="py-2 border-b border-utility-border/5 hover:text-brand-primary cursor-pointer block"
+                  onClick={() => { window.location.hash = '#/florists'; setIsMobileMenuOpen(false); }}
+                  className="py-2 border-b border-utility-border/40 hover:text-brand-primary cursor-pointer block"
                 >
-                  Journal Blogs
+                  Florists Guild
                 </span>
                 <span
-                  onClick={() => { window.location.hash = '#/about'; setIsMobileMenuOpen(false); }}
-                  className="py-2 border-b border-utility-border/5 hover:text-brand-primary cursor-pointer block"
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    if (user) {
+                      if (user.role === 'admin' || user.role === 'super_admin') {
+                        window.location.hash = '#/admin';
+                      } else if (user.role === 'florist') {
+                        if (!user.floristStatus) {
+                          window.location.hash = '#/register/florist';
+                        } else if (user.floristStatus === 'pending_review') {
+                          window.location.hash = '#/pending-approval';
+                        } else {
+                          window.location.hash = '#/florist-portal';
+                        }
+                      } else {
+                        window.location.hash = '#/profile';
+                      }
+                    } else {
+                      window.location.hash = '#/login';
+                    }
+                  }}
+                  className="py-2 text-brand-primary font-bold cursor-pointer block"
                 >
-                  Our Roots
-                </span>
-                <span
-                  onClick={() => { window.location.hash = '#/faq'; setIsMobileMenuOpen(false); }}
-                  className="py-2 border-b border-utility-border/5 hover:text-brand-primary cursor-pointer block"
-                >
-                  FAQ Support
-                </span>
-                <span
-                  onClick={() => { window.location.hash = '#/become-a-florist'; setIsMobileMenuOpen(false); }}
-                  className="py-2 text-brand-primary hover:text-brand-primary-hover cursor-pointer block"
-                >
-                  Become a Partner
+                  {user ? 'My Account' : 'Sign In / Register'}
                 </span>
               </div>
             </motion.div>
@@ -404,10 +530,10 @@ export function Layout({ children }: LayoutProps) {
       </main>
 
       {/* 3. Global Footer */}
-      <footer className="bg-white border-t border-utility-border pt-16 pb-8 text-text-secondary" id="global-footer">
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
-          {/* Col 1 */}
-          <div className="space-y-4">
+      <footer className="bg-white border-t border-utility-border pt-16 pb-12 text-text-secondary" id="global-footer">
+        <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 mb-12">
+          {/* Brand Col */}
+          <div className="col-span-2 space-y-4">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-brand-primary flex items-center justify-center text-white font-display font-semibold text-sm">
                 F_X
@@ -416,72 +542,79 @@ export function Layout({ children }: LayoutProps) {
                 Flora<span className="text-brand-primary">_X</span>
               </span>
             </div>
-            <p className="text-xs text-text-muted leading-relaxed">
-              Kenya’s premier botanical collective. Bridging Rift Valley floriculture directly into sophisticated local residential and corporate spaces.
+            <p className="text-xs text-text-muted leading-relaxed max-w-sm">
+              Kenya’s premier botanical collective connecting customers with verified master florists. Hand-tied bouquets harvested fresh from Naivasha and delivered with care across Nairobi and beyond.
             </p>
-            <div className="text-[11px] font-semibold text-text-primary space-y-1.5 font-mono">
-              <div>Licensed by: Horti-Guild East Africa</div>
-              <div>VAT Reg: KE-554433221</div>
+            <div className="text-[11px] text-text-secondary space-y-1 font-mono pt-1">
+              <div>East Africa Floriculture Guild • Reg KE-554433221</div>
+              <div className="flex items-center gap-1 text-brand-primary font-sans font-medium text-xs pt-1">
+                <Phone className="w-3.5 h-3.5" /> +254 711 000 111
+              </div>
             </div>
           </div>
 
-          {/* Col 2 */}
+          {/* Col 1: Shop */}
           <div className="space-y-3">
             <h3 className="font-display font-bold text-xs uppercase tracking-wider text-text-primary">
-              Shopping Guild
+              Shop
             </h3>
             <ul className="space-y-2 text-xs">
-              <li><span onClick={() => window.location.hash = '#/shop'} className="hover:text-brand-primary cursor-pointer">Premium Roses</span></li>
-              <li><span onClick={() => window.location.hash = '#/shop'} className="hover:text-brand-primary cursor-pointer">Luxury Centerpieces</span></li>
-              <li><span onClick={() => window.location.hash = '#/shop'} className="hover:text-brand-primary cursor-pointer">Everlasting Dried Bouquets</span></li>
-              <li><span onClick={() => window.location.hash = '#/florists'} className="hover:text-brand-primary cursor-pointer">Find Local Florists</span></li>
+              <li><span onClick={() => window.location.hash = '#/shop'} className="hover:text-brand-primary cursor-pointer transition-colors">Flowers</span></li>
+              <li><span onClick={() => window.location.hash = '#/shop?category=Gifts'} className="hover:text-brand-primary cursor-pointer transition-colors">Gifts & Hampers</span></li>
+              <li><span onClick={() => window.location.hash = '#/occasions'} className="hover:text-brand-primary cursor-pointer transition-colors">Occasions</span></li>
+              <li><span onClick={() => window.location.hash = '#/discover'} className="hover:text-brand-primary cursor-pointer transition-colors">Best Sellers</span></li>
             </ul>
           </div>
 
-          {/* Col 3 */}
+          {/* Col 2: Discover */}
           <div className="space-y-3">
             <h3 className="font-display font-bold text-xs uppercase tracking-wider text-text-primary">
-              Trust & Support
+              Discover
             </h3>
             <ul className="space-y-2 text-xs">
-              <li><span onClick={() => window.location.hash = '#/faq'} className="hover:text-brand-primary cursor-pointer">Fulfillment FAQs</span></li>
-              <li><span onClick={() => window.location.hash = '#/careers'} className="hover:text-brand-primary cursor-pointer">Careers at Flora_X</span></li>
-              <li><span onClick={() => window.location.hash = '#/privacy'} className="hover:text-brand-primary cursor-pointer">Privacy Policy</span></li>
-              <li><span onClick={() => window.location.hash = '#/terms'} className="hover:text-brand-primary cursor-pointer">Terms & Conditions</span></li>
+              <li><span onClick={() => window.location.hash = '#/florists'} className="hover:text-brand-primary cursor-pointer transition-colors">Florists Guild</span></li>
+              <li><span onClick={() => window.location.hash = '#/flower-finder'} className="hover:text-brand-primary cursor-pointer transition-colors">Flower Finder</span></li>
+              <li><span onClick={() => window.location.hash = '#/discover'} className="hover:text-brand-primary cursor-pointer transition-colors">New Arrivals</span></li>
+              <li><span onClick={() => window.location.hash = '#/shop'} className="hover:text-brand-primary cursor-pointer transition-colors">Same-Day Delivery</span></li>
             </ul>
           </div>
 
-          {/* Col 4 */}
+          {/* Col 3: Flora_X */}
           <div className="space-y-3">
             <h3 className="font-display font-bold text-xs uppercase tracking-wider text-text-primary">
-              Studio Hotline
+              Flora_X
             </h3>
-            <div className="text-xs space-y-2">
-              <p className="flex items-center gap-1.5 font-medium text-text-primary">
-                <Phone className="w-4 h-4 text-brand-primary" />
-                +254 711 000 111
-              </p>
-              <p className="flex items-center gap-1.5 font-medium">
-                <Mail className="w-4 h-4 text-brand-primary" />
-                care@florax.co.ke
-              </p>
-              <p className="text-[10px] text-text-muted mt-2">
-                We are open for holiday consultations Mon-Sat: 8 AM - 6 PM. Hand-tied logistics 365 days a year.
-              </p>
-            </div>
+            <ul className="space-y-2 text-xs">
+              <li><span onClick={() => window.location.hash = '#/about'} className="hover:text-brand-primary cursor-pointer transition-colors">About Us</span></li>
+              <li><span onClick={() => window.location.hash = '#/how-it-works'} className="hover:text-brand-primary cursor-pointer transition-colors">How It Works</span></li>
+              <li><span onClick={() => window.location.hash = '#/become-a-florist'} className="hover:text-brand-primary cursor-pointer transition-colors text-brand-primary font-semibold">Become a Florist</span></li>
+              <li><span onClick={() => window.location.hash = '#/contact'} className="hover:text-brand-primary cursor-pointer transition-colors">Contact</span></li>
+            </ul>
+          </div>
+
+          {/* Col 4: Help & Legal */}
+          <div className="space-y-3">
+            <h3 className="font-display font-bold text-xs uppercase tracking-wider text-text-primary">
+              Help & Legal
+            </h3>
+            <ul className="space-y-2 text-xs">
+              <li><span onClick={() => window.location.hash = '#/faq'} className="hover:text-brand-primary cursor-pointer transition-colors">FAQs</span></li>
+              <li><span onClick={() => window.location.hash = '#/how-it-works'} className="hover:text-brand-primary cursor-pointer transition-colors">Delivery Specs</span></li>
+              <li><span onClick={() => window.location.hash = '#/faq'} className="hover:text-brand-primary cursor-pointer transition-colors">M-Pesa Payments</span></li>
+              <li><span onClick={() => window.location.hash = '#/privacy'} className="hover:text-brand-primary cursor-pointer transition-colors">Privacy & Terms</span></li>
+            </ul>
           </div>
         </div>
 
-        <div className="max-w-7xl mx-auto px-6 pt-8 border-t border-utility-border flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-6 pt-8 border-t border-utility-border flex flex-col sm:flex-row items-center justify-between gap-4">
           <span className="text-[11px] text-text-muted font-medium">
-            © 2026 Flora_X Kenya Ltd. Built with professional design guidelines. All rights reserved.
+            © 2026 Flora_X Kenya Ltd. Connecting Rift Valley floriculture with Kenya's homes. All rights reserved.
           </span>
-          <div className="flex gap-4 items-center shrink-0">
-            {/* Mock payment badge assets */}
-            <span className="px-2 py-0.5 bg-canvas rounded-xs text-[9px] font-bold text-text-muted uppercase tracking-wider border border-utility-border font-mono">
-              M-PESA PUSH
+          <div className="flex gap-3 items-center shrink-0">
+            <span className="px-2.5 py-1 bg-canvas rounded-md text-[10px] font-bold text-brand-primary uppercase tracking-wider border border-utility-border font-mono">
+              SAFARICOM M-PESA
             </span>
-            <span className="px-2 py-0.5 bg-canvas rounded-xs text-[9px] font-bold text-text-muted uppercase tracking-wider border border-utility-border font-mono">
+            <span className="px-2.5 py-1 bg-canvas rounded-md text-[10px] font-bold text-text-muted uppercase tracking-wider border border-utility-border font-mono">
               VISA / MASTERCARD
             </span>
           </div>
@@ -518,7 +651,7 @@ export function Layout({ children }: LayoutProps) {
 
               {/* Checkout step views */}
               {checkoutStep === 'cart' && (
-                <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
+                <div className="flex-1 overflow-y-auto py-4 space-y-5 pr-1">
                   {cart.length === 0 ? (
                     <div className="text-center py-16 space-y-4">
                       <div className="w-12 h-12 bg-canvas text-text-muted rounded-full flex items-center justify-center mx-auto">
@@ -527,87 +660,103 @@ export function Layout({ children }: LayoutProps) {
                       <p className="text-xs text-text-secondary">Your bag is currently empty.</p>
                       <button
                         onClick={() => { setCartOpen(false); window.location.hash = '#/shop'; }}
-                        className="px-4 py-2 border border-brand-primary text-brand-primary font-semibold text-[11px] uppercase tracking-wider rounded-md"
+                        className="px-4 py-2 border border-brand-primary text-brand-primary font-semibold text-[11px] uppercase tracking-wider rounded-md cursor-pointer hover:bg-brand-primary/5 transition-all"
                       >
                         Shop Flowers
                       </button>
                     </div>
                   ) : (
-                    <>
-                      {/* Cart List */}
-                      <div className="space-y-4">
-                        {cart.map((item, idx) => (
-                          <div key={idx} className="flex gap-4 p-3 border border-utility-border rounded-xl">
-                            <div className="w-16 h-16 rounded-md overflow-hidden bg-canvas shrink-0">
-                              <img src={item.product.images[0]} alt="" className="w-full h-full object-cover" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex justify-between items-start">
-                                <h4 className="text-xs font-semibold text-text-primary truncate">{item.product.title}</h4>
-                                <button
-                                  onClick={() => removeFromCart(item.product.id, item.size)}
-                                  className="text-text-muted hover:text-brand-secondary p-1"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                              <p className="text-[10px] text-brand-secondary font-semibold uppercase font-display mt-0.5">
-                                {item.size} • KES {item.product.price.toLocaleString()}
-                              </p>
-                              
-                              {item.cardMessage && (
-                                <p className="text-[10px] text-text-muted italic bg-canvas p-1.5 rounded-sm mt-1 line-clamp-1 border border-utility-border/50">
-                                  " {item.cardMessage} "
-                                </p>
-                              )}
-
-                              <div className="flex items-center justify-between mt-2 pt-2 border-t border-utility-border/40">
-                                <div className="flex items-center border border-utility-border rounded-xs bg-white h-7">
-                                  <button
-                                    onClick={() => updateCartQuantity(item.product.id, item.size, item.quantity - 1)}
-                                    className="px-2 text-text-secondary font-bold"
-                                  >
-                                    -
-                                  </button>
-                                  <span className="w-6 text-center font-bold font-mono text-[11px] text-text-primary">
-                                    {item.quantity}
-                                  </span>
-                                  <button
-                                    onClick={() => updateCartQuantity(item.product.id, item.size, item.quantity + 1)}
-                                    className="px-2 text-text-secondary font-bold"
-                                  >
-                                    +
-                                  </button>
-                                </div>
-                                <span className="text-xs font-bold font-mono text-text-primary">
-                                  KES {((item.product.price + (item.size === 'Deluxe' ? 1500 : item.size === 'Grandee' ? 3000 : 0)) * item.quantity).toLocaleString()}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Multivendor Fee breakdown */}
-                      <div className="p-4 bg-canvas border border-utility-border rounded-xl space-y-2">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted font-display block">
-                          Logistics Cost Summary
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between pb-1">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">
+                          Your Order ({cart.reduce((s, i) => s + i.quantity, 0)} items)
                         </span>
-                        <div className="space-y-1.5 text-xs text-text-secondary">
-                          <div className="flex justify-between">
-                            <span>Sourced Florists:</span>
-                            <span className="font-semibold">{uniqueFloristIds.length} Studio(s)</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Regional Delivery Fee:</span>
-                            <span className="font-semibold font-mono">KES {totalDeliveryFee.toLocaleString()}</span>
-                          </div>
-                          <p className="text-[9px] text-text-muted leading-relaxed pt-1.5 border-t border-utility-border/50">
-                            * Note: Since you are ordering from {uniqueFloristIds.length} separate master workshops, separate flat delivery fees of KES {baseDeliveryFee} apply per florist.
-                          </p>
-                        </div>
+                        <button
+                          onClick={clearCart}
+                          className="text-[11px] text-brand-secondary hover:underline cursor-pointer"
+                        >
+                          Clear all
+                        </button>
                       </div>
-                    </>
+
+                      {/* Group items visually by florist studio */}
+                      {floristGroups.map((group) => (
+                        <div key={group.floristId} className="border border-utility-border rounded-xl p-3.5 bg-white space-y-3 shadow-xs">
+                          {/* Florist Studio Header */}
+                          <div className="flex items-center justify-between border-b border-utility-border/60 pb-2">
+                            <div>
+                              <h4 className="text-xs font-bold text-text-primary flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-brand-primary" />
+                                {group.floristName}
+                              </h4>
+                              <p className="text-[10px] text-text-muted mt-0.5">
+                                {group.items.reduce((s, i) => s + i.quantity, 0)} {group.items.reduce((s, i) => s + i.quantity, 0) === 1 ? 'item' : 'items'} • KSh {group.subtotal.toLocaleString()}
+                              </p>
+                            </div>
+                            <span className="text-[10px] font-semibold text-brand-primary bg-brand-primary/10 px-2 py-0.5 rounded-sm">
+                              Delivery: KSh {group.deliveryFee.toLocaleString()}
+                            </span>
+                          </div>
+
+                          {/* Items from this florist */}
+                          <div className="space-y-3 pt-1">
+                            {group.items.map((item, idx) => {
+                              const sizePriceAdjustment = { Standard: 0, Deluxe: 1500, Grandee: 3000 };
+                              const itemUnit = item.product.price + sizePriceAdjustment[item.size];
+                              return (
+                                <div key={idx} className="flex gap-3 items-start">
+                                  <div className="w-14 h-14 rounded-lg overflow-hidden bg-canvas shrink-0 border border-utility-border/50">
+                                    <img src={item.product.images[0]} alt="" className="w-full h-full object-cover" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex justify-between items-start gap-1">
+                                      <h5 className="text-xs font-semibold text-text-primary truncate">{item.product.title}</h5>
+                                      <button
+                                        onClick={() => removeFromCart(item.product.id, item.size)}
+                                        className="text-text-muted hover:text-brand-secondary p-0.5 cursor-pointer"
+                                        title="Remove item"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                    <p className="text-[10px] text-text-secondary mt-0.5">
+                                      Size: <span className="font-semibold text-text-primary">{item.size}</span> • KSh {itemUnit.toLocaleString()}
+                                    </p>
+                                    {item.cardMessage && (
+                                      <p className="text-[10px] text-text-muted italic bg-canvas px-2 py-1 rounded-sm mt-1 border border-utility-border/50 truncate">
+                                        Card: "{item.cardMessage}"
+                                      </p>
+                                    )}
+                                    <div className="flex items-center justify-between mt-2">
+                                      <div className="flex items-center border border-utility-border rounded-md bg-canvas h-6">
+                                        <button
+                                          onClick={() => updateCartQuantity(item.product.id, item.size, item.quantity - 1)}
+                                          className="px-2 text-text-secondary hover:text-text-primary font-bold cursor-pointer"
+                                        >
+                                          -
+                                        </button>
+                                        <span className="w-5 text-center font-bold text-[11px] text-text-primary font-mono">
+                                          {item.quantity}
+                                        </span>
+                                        <button
+                                          onClick={() => updateCartQuantity(item.product.id, item.size, item.quantity + 1)}
+                                          className="px-2 text-text-secondary hover:text-text-primary font-bold cursor-pointer"
+                                        >
+                                          +
+                                        </button>
+                                      </div>
+                                      <span className="text-xs font-bold font-mono text-text-primary">
+                                        KSh {(itemUnit * item.quantity).toLocaleString()}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               )}
@@ -671,6 +820,21 @@ export function Layout({ children }: LayoutProps) {
 
                       <div>
                         <label className="block text-[10px] uppercase tracking-wider font-semibold font-display text-text-muted mb-1">
+                          Delivery Window *
+                        </label>
+                        <select
+                          value={deliverySlot}
+                          onChange={(e) => setDeliverySlot(e.target.value)}
+                          className="w-full p-2.5 text-xs border border-utility-border rounded-md focus:outline-hidden focus:border-brand-primary text-text-secondary bg-white"
+                        >
+                          <option value="Morning (09:00 - 12:00)">Morning (09:00 - 12:00)</option>
+                          <option value="Afternoon (12:00 - 16:00)">Afternoon (12:00 - 16:00)</option>
+                          <option value="Evening (16:00 - 19:00)">Evening (16:00 - 19:00)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-wider font-semibold font-display text-text-muted mb-1">
                           Delivery Address *
                         </label>
                         <div className="relative">
@@ -688,7 +852,20 @@ export function Layout({ children }: LayoutProps) {
 
                       <div>
                         <label className="block text-[10px] uppercase tracking-wider font-semibold font-display text-text-muted mb-1">
-                          Special Instructions (Optional)
+                          Complimentary Gift Card Message
+                        </label>
+                        <textarea
+                          value={cardMessage}
+                          onChange={(e) => setCardMessage(e.target.value)}
+                          placeholder="e.g. Wishing you blooming joy on your special day!"
+                          rows={2}
+                          className="w-full p-2.5 text-xs border border-utility-border rounded-md focus:outline-hidden focus:border-brand-primary text-text-secondary resize-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-wider font-semibold font-display text-text-muted mb-1">
+                          Special Courier Instructions (Optional)
                         </label>
                         <textarea
                           value={deliveryInstructions}
@@ -753,7 +930,7 @@ export function Layout({ children }: LayoutProps) {
                           <Smartphone className="absolute top-3.5 left-3 w-4 h-4 text-text-muted" />
                         </div>
                         <p className="text-[10px] text-text-muted">
-                          You will receive an immediate STK pin query on your mobile to securely complete the transaction.
+                          You will receive an immediate STK PIN prompt on your Safaricom mobile to authorize the payment.
                         </p>
                       </div>
                     ) : (
@@ -800,13 +977,15 @@ export function Layout({ children }: LayoutProps) {
                     <div className="pt-4 border-t border-utility-border space-y-3 shrink-0">
                       <div className="flex justify-between text-xs text-text-secondary font-medium">
                         <span>Checkout Total:</span>
-                        <span className="font-bold text-brand-primary font-mono text-sm">KES {finalTotal.toLocaleString()}</span>
+                        <span className="font-bold text-brand-primary font-mono text-sm">KSh {finalTotal.toLocaleString()}</span>
                       </div>
                       <button
                         type="submit"
-                        className="w-full py-3 bg-brand-primary text-white hover:bg-brand-primary-hover font-semibold text-xs uppercase tracking-wider rounded-md transition-all cursor-pointer"
+                        className="w-full py-3 bg-brand-primary text-white hover:bg-brand-primary-hover font-semibold text-xs uppercase tracking-wider rounded-md transition-all cursor-pointer shadow-sm"
                       >
-                        Confirm Settlement
+                        {paymentMethod === 'mpesa'
+                          ? `Pay with M-Pesa • KSh ${finalTotal.toLocaleString()}`
+                          : `Pay with Card • KSh ${finalTotal.toLocaleString()}`}
                       </button>
                       <button
                         type="button"
@@ -823,58 +1002,161 @@ export function Layout({ children }: LayoutProps) {
               {checkoutStep === 'processing' && (
                 <div className="flex-1 flex flex-col items-center justify-center text-center space-y-5 p-6">
                   <div className="w-14 h-14 border-4 border-brand-primary border-t-transparent rounded-full animate-spin" />
-                  <div className="space-y-1.5">
-                    <h4 className="font-display font-semibold text-text-primary text-base">STK Push Transmitting...</h4>
+                  <div className="space-y-2">
+                    <h4 className="font-display font-semibold text-text-primary text-base">
+                      {paymentMethod === 'mpesa' ? 'Awaiting M-Pesa Authorization...' : 'Authorizing Card Payment...'}
+                    </h4>
                     <p className="text-xs text-text-secondary max-w-xs leading-relaxed">
-                      We have sent an M-Pesa push query to <span className="font-semibold font-mono">{mpesaPhone || 'your device'}</span>. Please input your secure M-Pesa PIN on your phone to authorize this payout.
+                      {paymentMethod === 'mpesa' ? (
+                        <>We have sent an M-Pesa push prompt to <span className="font-semibold font-mono">{mpesaPhone || 'your device'}</span>. Please input your secure M-Pesa PIN on your phone to authorize this flower order.</>
+                      ) : (
+                        <>Securely contacting your issuing bank to confirm and settle your order total of <span className="font-bold text-brand-primary">KSh {finalTotal.toLocaleString()}</span>.</>
+                      )}
                     </p>
                   </div>
                 </div>
               )}
 
               {checkoutStep === 'success' && (
-                <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6 p-6">
-                  <div className="w-16 h-16 bg-utility-success/10 text-brand-primary rounded-full flex items-center justify-center animate-bounce">
-                    <CheckCircle className="w-8 h-8" />
+                <div className="flex-1 overflow-y-auto py-6 space-y-5 text-left">
+                  <div className="flex flex-col items-center text-center space-y-3 pb-2 border-b border-utility-border">
+                    <div className="w-14 h-14 bg-utility-success/15 text-brand-primary rounded-full flex items-center justify-center">
+                      <CheckCircle className="w-7 h-7 text-green-600" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="font-display font-semibold text-text-primary text-lg">Order Confirmed & Paid!</h4>
+                      <p className="text-xs text-text-secondary">
+                        Your payment of <span className="font-bold text-brand-primary">KSh {finalTotal.toLocaleString()}</span> was verified successfully.
+                      </p>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <h4 className="font-display font-semibold text-text-primary text-lg">Order Booking Secured!</h4>
-                    <p className="text-xs text-text-secondary max-w-xs leading-relaxed">
-                      Your payout was approved successfully! Your chosen master florists have been alerted and are hand-arranging your blooms. You will receive live SMS shipping status updates shortly.
-                    </p>
+
+                  {/* Order Details Card */}
+                  <div className="bg-canvas border border-utility-border rounded-xl p-4 space-y-3 text-xs">
+                    <div className="flex justify-between items-center pb-2 border-b border-utility-border/60">
+                      <span className="text-text-muted font-medium">Order Reference:</span>
+                      <span className="font-mono font-bold text-text-primary">#{parentOrderId || 'ORD-COMPLETE'}</span>
+                    </div>
+
+                    {mpesaReceiptNumber && (
+                      <div className="flex justify-between items-center pb-2 border-b border-utility-border/60">
+                        <span className="text-text-muted font-medium">Transaction Receipt:</span>
+                        <span className="font-mono font-bold text-brand-primary">{mpesaReceiptNumber}</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between items-center pb-2 border-b border-utility-border/60">
+                      <span className="text-text-muted font-medium">Recipient:</span>
+                      <span className="font-medium text-text-primary text-right truncate max-w-[180px]">
+                        {recipientName} ({recipientPhone})
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-start pb-2 border-b border-utility-border/60">
+                      <span className="text-text-muted font-medium">Delivery Address:</span>
+                      <span className="font-medium text-text-primary text-right max-w-[180px] leading-tight">
+                        {deliveryAddress}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center pb-2 border-b border-utility-border/60">
+                      <span className="text-text-muted font-medium">Scheduled Delivery:</span>
+                      <span className="font-medium text-text-primary">{deliveryDate} • {deliverySlot}</span>
+                    </div>
+
+                    <div className="flex justify-between items-start">
+                      <span className="text-text-muted font-medium">Florist Studio:</span>
+                      <span className="font-medium text-text-primary text-right max-w-[180px]">
+                        {floristGroups.map((g) => g.floristName).join(', ')}
+                      </span>
+                    </div>
                   </div>
-                  <button
-                    onClick={handleResetCheckout}
-                    className="px-6 py-2.5 bg-brand-primary text-white hover:bg-brand-primary-hover font-semibold text-xs uppercase tracking-wider rounded-md"
-                  >
-                    Asante Sana • Continue
-                  </button>
+
+                  <p className="text-[11px] text-text-muted text-center leading-relaxed">
+                    Our master florist is hand-conditioning your fresh blooms now. You will receive SMS alerts as your arrangement is prepared and dispatched.
+                  </p>
+
+                  <div className="space-y-2 pt-2">
+                    <button
+                      onClick={() => {
+                        handleResetCheckout();
+                        window.location.hash = '#/profile';
+                      }}
+                      className="w-full py-3 bg-brand-primary text-white hover:bg-brand-primary-hover font-semibold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm"
+                    >
+                      <span>Track Order in Profile</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleResetCheckout();
+                        window.location.hash = '#/shop';
+                      }}
+                      className="w-full py-2.5 text-center text-xs font-semibold uppercase text-text-muted hover:text-text-primary transition-all cursor-pointer"
+                    >
+                      Continue Shopping
+                    </button>
+                  </div>
                 </div>
               )}
 
               {/* Total checkout calculation footer */}
               {checkoutStep === 'cart' && cart.length > 0 && (
-                <div className="border-t border-utility-border pt-4 space-y-4 shrink-0 bg-white">
+                <div className="border-t border-utility-border pt-4 space-y-3 shrink-0 bg-white">
+                  {errorMessage && (
+                    <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 text-[11px] rounded-md font-medium">
+                      {errorMessage}
+                    </div>
+                  )}
+
+                  {!user && (
+                    <div className="p-3 bg-brand-primary/5 border border-brand-primary/20 rounded-lg flex items-center justify-between gap-2">
+                      <div className="text-[11px] text-text-secondary leading-tight">
+                        <span className="font-bold text-brand-primary">Shopping as guest?</span> Sign in to track live orders.
+                      </div>
+                      <button
+                        onClick={() => {
+                          setCartOpen(false);
+                          window.location.hash = '#/login';
+                        }}
+                        className="px-2.5 py-1 text-[11px] font-bold bg-brand-primary text-white rounded-md whitespace-nowrap cursor-pointer hover:bg-brand-primary-hover"
+                      >
+                        Sign In
+                      </button>
+                    </div>
+                  )}
+
                   <div className="space-y-1.5 text-xs text-text-secondary">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted font-display block mb-1">
+                      Order Total
+                    </span>
                     <div className="flex justify-between">
-                      <span>Items Subtotal:</span>
-                      <span className="font-semibold font-mono">KES {cartSubtotal.toLocaleString()}</span>
+                      <span>Items:</span>
+                      <span className="font-semibold font-mono">KSh {cartSubtotal.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Logistics Fee:</span>
-                      <span className="font-semibold font-mono">KES {totalDeliveryFee.toLocaleString()}</span>
+                      <span>Delivery ({floristGroups.length} {floristGroups.length === 1 ? 'florist' : 'florists'}):</span>
+                      <span className="font-semibold font-mono">KSh {totalDeliveryFee.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-sm font-bold text-text-primary border-t border-utility-border/50 pt-2">
-                      <span>Final Total:</span>
-                      <span className="font-bold text-brand-primary font-mono text-base">KES {finalTotal.toLocaleString()}</span>
+                      <span>Total:</span>
+                      <span className="font-bold text-brand-primary font-mono text-base">KSh {finalTotal.toLocaleString()}</span>
                     </div>
                   </div>
 
                   <button
-                    onClick={() => setCheckoutStep('payment')}
-                    className="w-full py-3 bg-brand-primary text-white hover:bg-brand-primary-hover font-semibold text-xs uppercase tracking-wider rounded-md transition-all cursor-pointer flex items-center justify-center gap-2"
+                    onClick={() => {
+                      if (!user) {
+                        setErrorMessage('Please sign in or register to complete your order.');
+                        setCartOpen(false);
+                        window.location.hash = '#/login';
+                        return;
+                      }
+                      setCheckoutStep('payment');
+                    }}
+                    className="w-full py-3.5 bg-brand-primary text-white hover:bg-brand-primary-hover font-semibold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm"
                   >
-                    Proceed To Settlement
+                    <span>Continue to Checkout</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
@@ -1062,6 +1344,12 @@ export function Layout({ children }: LayoutProps) {
           </motion.div>
         </div>
       )}
+
+      {/* Global Search Overlay Modal */}
+      <SearchModal
+        isOpen={isSearchModalOpen}
+        onClose={() => setIsSearchModalOpen(false)}
+      />
     </div>
   );
 }
